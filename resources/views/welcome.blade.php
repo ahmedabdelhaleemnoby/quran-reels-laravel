@@ -303,12 +303,10 @@
       e.preventDefault();
 
       const overlay = document.getElementById('progress-overlay');
-      const progressText = document.getElementById('progress-text');
       const progressStatus = document.getElementById('progress-status');
 
       // Reset UI
       overlay.style.display = 'flex';
-      progressText.innerText = '0%';
       progressStatus.innerText = 'يرجي الانتظار جاري انشاء الفيديو...';
 
       const formData = new FormData(this);
@@ -323,7 +321,6 @@
 
             if (data.progress !== undefined) {
               progress = data.progress;
-              progressText.innerText = Math.round(progress) + '%';
               if (data.status) progressStatus.innerText = data.status;
             }
           } catch (err) {
@@ -332,6 +329,7 @@
         }, 1500);
 
         // Submit form via AJAX
+        console.log('Submitting form...'); // Debug log
         const response = await fetch('{{ route("generator.generate") }}', {
           method: 'POST',
           body: formData,
@@ -342,12 +340,23 @@
         });
 
         clearInterval(pollInterval); // Stop polling on response
+        
+        console.log('Response status:', response.status); // Debug log
+        
+        // Check if response is OK
+        if (!response.ok) {
+          console.error('HTTP error! status:', response.status);
+          overlay.style.display = 'none';
+          alert('خطأ في الخادم. الرجاء المحاولة مرة أخرى.');
+          return;
+        }
 
         const result = await response.json();
+        console.log('Server response:', result); // Debug log
 
         if (result.success && result.video_url) {
-          progressText.innerText = '100%';
-          progressStatus.innerText = 'Done!';
+          console.log('Video URL:', result.video_url); // Debug log
+          progressStatus.innerText = 'تم الانتهاء!';
 
           // Wait a moment then show video
           setTimeout(() => {
@@ -374,17 +383,19 @@
 
             const footer = document.querySelector('.footer');
             footer.insertAdjacentHTML('beforebegin', previewHtml);
+            console.log('Video inserted into DOM'); // Debug log
           }, 1000);
         } else {
+          console.error('Generation failed:', result); // Debug log
           overlay.style.display = 'none';
-          alert('Error: ' + (result.message || 'Unknown error occurred'));
+          alert('فشل إنشاء الفيديو: ' + (result.message || 'خطأ غير معروف'));
         }
 
       } catch (error) {
+        clearInterval(pollInterval); // Make sure to stop polling
         console.error('Submission error:', error);
         overlay.style.display = 'none';
-        alert('An unexpected error occurred. Please try again.');
-        location.reload();
+        alert('حدث خطأ غير متوقع. الرجاء المحاولة مرة أخرى.');
       }
     });
   </script>

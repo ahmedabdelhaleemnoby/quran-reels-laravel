@@ -146,7 +146,8 @@ class VideoGeneratorController extends Controller
       return back()->with('error', 'Video generation failed. Please check logs for details.');
     }
 
-    $videoUrl = Storage::disk('public')->url('videos/output/' . basename($finalVideoPath));
+    // Generate proper URL using asset() helper
+    $videoUrl = asset('storage/videos/output/' . basename($finalVideoPath));
 
     if ($request->expectsJson()) {
       return response()->json(['success' => true, 'video_url' => $videoUrl]);
