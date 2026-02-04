@@ -19,6 +19,57 @@ class QuranVideoService
     $this->ffmpeg = env('FFMPEG_PATH', 'ffmpeg');
     $this->ffprobe = env('FFPROBE_PATH', 'ffprobe');
     $this->magick = env('MAGICK_PATH', 'magick');
+
+    // Ensure directories exist on public disk
+    $this->ensureDirectoriesExist();
+  }
+
+  protected function ensureDirectoriesExist()
+  {
+    $directories = ['audio', 'images', 'videos/output'];
+    foreach ($directories as $dir) {
+      if (!Storage::disk('public')->exists($dir)) {
+        Storage::disk('public')->makeDirectory($dir);
+      }
+    }
+  }
+
+  /**
+   * Find an available Arabic font.
+   */
+  protected function getFontPath()
+  {
+    $fonts = [
+      '/Library/Fonts/Amiri-Regular.ttf',
+      '/System/Library/Fonts/GeezaPro.ttc',
+      '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+    ];
+
+    foreach ($fonts as $font) {
+      if (file_exists($font)) {
+        return $font;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Run a shell command and log errors if it fails.
+   */
+  protected function runCommand($command, $context = "")
+  {
+    $output = [];
+    $returnVar = 0;
+    Log::info("Executing command: {$command}");
+    exec($command . " 2>&1", $output, $returnVar);
+
+    if ($returnVar !== 0) {
+      Log::error("Command failed ($context). Return code: {$returnVar}. Output: " . implode("\n", $output));
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -26,17 +77,17 @@ class QuranVideoService
    */
   public function mergeAudio(array $audioPaths, $sessionId)
   {
-    $outputPath = Storage::path("audio/merged_{$sessionId}.mp3");
-    $listFile = Storage::path("audio/list_{$sessionId}.txt");
+    $outputPath = Storage::disk('public')->path("audio/merged_{$sessionId}.mp3");
+    $listFile = Storage::disk('public')->path("audio/list_{$sessionId}.txt");
 
     $content = "";
     foreach ($audioPaths as $path) {
       $content .= "file '" . str_replace("'", "'\\''", $path) . "'\n";
     }
-    File_put_contents($listFile, $content);
+    file_put_contents($listFile, $content);
 
-    $command = "{$this->ffmpeg} -y -f concat -safe 0 -i {$listFile} -c copy {$outputPath}";
-    exec($command);
+    $command = "{$this->ffmpeg} -y -f concat -safe 0 -i \"{$listFile}\" -c copy \"{$outputPath}\"";
+    $this->runCommand($command, "merging audio");
 
     return $outputPath;
   }
@@ -53,28 +104,194 @@ class QuranVideoService
   /**
    * Generate Arabic text overlay image using ImageMagick.
    */
+  /**
+   * Generate Arabic text overlay image using PHP GD.
+   * This handles basic RTL and Shaping (Ligatures).
+   */
   public function generateTextOverlay($text, $index, $sessionId)
   {
-    $outputPath = Storage::path("images/overlay_{$sessionId}_{$index}.png");
+    $outputPath = Storage::disk('public')->path("images/overlay_{$sessionId}_{$index}.png");
+    $fontPath = $this->getFontPath();
 
-    // Using a clean, elegant styling for the Arabic text
-    // Note: Assumes Amiri or similar font is installed. We'll fallback to sans if not.
-    $command = "{$this->magick} -size {$this->width}x{$this->height} xc:none " .
-      "-gravity center -fill white -font \"Amiri-Regular\" -pointsize 60 " .
-      "-draw \"text 0,0 '{$text}'\" " .
-      "-shadow 100x3+5+5 \"{$outputPath}\"";
+    if (!$fontPath) {
+      Log::error("No suitable Arabic font found for GD rendering.");
+      return null;
+    }
 
-    // Fallback for RTL and complex rendering: Using pango or simple text
-    // Better: magick -background none -fill white -font Amiri -pointsize 70 -size 900x -gravity center caption:"TEXT" ...
-    $safeText = escapeshellarg($text);
-    $command = "{$this->magick} -background none -fill white -font \"Amiri\" -pointsize 65 " .
-      "-size 900x -gravity center caption:{$safeText} " .
-      "\( +clone -background black -shadow 80x3+2+2 \) +swap -layers merge +repage " .
-      "-size {$this->width}x{$this->height} -gravity center -extent {$this->width}x{$this->height} " .
-      "\"{$outputPath}\"";
+    // 1. Create a transparent canvas
+    $image = imagecreatetruecolor($this->width, $this->height);
+    imagesavealpha($image, true);
+    $transparent = imagecolorallocatealpha($image, 0, 0, 0, 127);
+    imagefill($image, 0, 0, $transparent);
 
-    exec($command);
+    // 2. Text settings
+    $fontSize = 45;
+    $white = imagecolorallocate($image, 255, 255, 255);
+    $black = imagecolorallocatealpha($image, 0, 0, 0, 80); // Shadow
+
+    // 3. Prepare RTL and Word Wrap
+    $lines = $this->wrapArabicText($text, 25, $fontSize, $fontPath);
+
+    // 4. Centering calculation
+    $lineHeight = $fontSize * 1.6;
+    $totalHeight = count($lines) * $lineHeight;
+    $startY = ($this->height - $totalHeight) / 2 + $fontSize;
+
+    foreach ($lines as $i => $line) {
+      $bbox = imagettfbbox($fontSize, 0, $fontPath, $line);
+      $textWidth = $bbox[2] - $bbox[0];
+      $x = ($this->width - $textWidth) / 2;
+      $y = $startY + ($i * $lineHeight);
+
+      // Draw Shadow
+      imagettftext($image, $fontSize, 0, $x + 3, $y + 3, $black, $fontPath, $line);
+      // Draw Text
+      imagettftext($image, $fontSize, 0, $x, $y, $white, $fontPath, $line);
+    }
+
+    imagepng($image, $outputPath);
+    imagedestroy($image);
+
     return $outputPath;
+  }
+
+  /**
+   * Custom Wrapper for Arabic (RTL Aware)
+   */
+  protected function wrapArabicText($text, $maxCharsPerLine, $fontSize, $fontPath)
+  {
+    $words = explode(' ', $text);
+    $lines = [];
+    $currentLine = [];
+    $currentChars = 0;
+
+    foreach ($words as $word) {
+      $wordLen = mb_strlen($word);
+      if ($currentChars + $wordLen > $maxCharsPerLine && !empty($currentLine)) {
+        // Process the line: shape each word, reverse words order
+        $lines[] = $this->processRtlLine($currentLine);
+        $currentLine = [];
+        $currentChars = 0;
+      }
+      $currentLine[] = $word;
+      $currentChars += $wordLen + 1;
+    }
+
+    if (!empty($currentLine)) {
+      $lines[] = $this->processRtlLine($currentLine);
+    }
+
+    return $lines;
+  }
+
+  protected function processRtlLine($words)
+  {
+    $shapedWords = [];
+    foreach ($words as $word) {
+      $shapedWords[] = $this->utf8_strrev($this->shapeArabicWord($word));
+    }
+    // Reverse word order for RTL rendering in LTR engine
+    return implode(' ', array_reverse($shapedWords));
+  }
+
+  protected function shapeArabicWord($word)
+  {
+    // Aggressively remove Tashkeel, Tajweed marks, BOMs, and all control/special whitespace
+    $word = preg_replace('/[\x{064B}-\x{065F}\x{0670}\x{06D6}-\x{06ED}\x{200B}-\x{200F}\x{00A0}\x{FEFF}\x{0000}-\x{001F}]/u', '', $word);
+    $word = trim($word);
+
+    // Initial Glyph Mapping (Isolated => [Isolated, End, Middle, Beginning])
+    $glyphs = [
+      'ا' => ['\uFE8D', '\uFE8E', '\uFE8D', '\uFE8E'],
+      'أ' => ['\uFE83', '\uFE84', '\uFE83', '\uFE84'],
+      'إ' => ['\uFE87', '\uFE88', '\uFE87', '\uFE88'],
+      'آ' => ['\uFE81', '\uFE82', '\uFE81', '\uFE82'],
+      'ٱ' => ['\uFB50', '\uFB51', '\uFB50', '\uFB51'], // Alef Wasla
+      'ب' => ['\uFE8F', '\uFE90', '\uFE92', '\uFE91'],
+      'ت' => ['\uFE95', '\uFE96', '\uFE98', '\uFE97'],
+      'ث' => ['\uFE99', '\uFE9A', '\uFE9C', '\uFE9B'],
+      'ج' => ['\uFE9D', '\uFE9E', '\uFEA0', '\uFE9F'],
+      'ح' => ['\uFEA1', '\uFEA2', '\uFEA4', '\uFEA3'],
+      'خ' => ['\uFEA5', '\uFEA6', '\uFEA8', '\uFEA7'],
+      'د' => ['\uFEA9', '\uFEAA', '\uFEA9', '\uFEAA'],
+      'ذ' => ['\uFEAB', '\uFEAC', '\uFEAB', '\uFEAC'],
+      'ر' => ['\uFEAD', '\uFEAE', '\uFEAD', '\uFEAE'],
+      'ز' => ['\uFEAF', '\uFEB0', '\uFEAF', '\uFEB0'],
+      'س' => ['\uFEB1', '\uFEB2', '\uFEB4', '\uFEB3'],
+      'ش' => ['\uFEB5', '\uFEB6', '\uFEB8', '\uFEB7'],
+      'ص' => ['\uFEB9', '\uFEBA', '\uFEBC', '\uFEBB'],
+      'ض' => ['\uFEBD', '\uFEBE', '\uFEC0', '\uFEBF'],
+      'ط' => ['\uFEC1', '\uFEC2', '\uFEC4', '\uFEC3'],
+      'ظ' => ['\uFEC5', '\uFEC6', '\uFEC8', '\uFEC7'],
+      'ع' => ['\uFEC9', '\uFECA', '\uFECC', '\uFECB'],
+      'غ' => ['\uFECD', '\uFECE', '\uFED0', '\uFECF'],
+      'ف' => ['\uFED1', '\uFED2', '\uFED4', '\uFED3'],
+      'ق' => ['\uFED5', '\uFED6', '\uFED8', '\uFED7'],
+      'ك' => ['\uFED9', '\uFEDA', '\uFEDC', '\uFEDB'],
+      'ل' => ['\uFEDD', '\uFEDE', '\uFEE0', '\uFEDF'],
+      'م' => ['\uFEE1', '\uFEE2', '\uFEE4', '\uFEE3'],
+      'ن' => ['\uFEE5', '\uFEE6', '\uFEE8', '\uFEE7'],
+      'ه' => ['\uFEE9', '\uFEEA', '\uFEEC', '\uFEEB'],
+      'و' => ['\uFEED', '\uFEEE', '\uFEED', '\uFEEE'],
+      'ي' => ['\uFEF1', '\uFEF2', '\uFEF4', '\uFEF3'],
+      'ى' => ['\uFEEF', '\uFEF0', '\uFEEF', '\uFEF0'],
+      'ة' => ['\uFE93', '\uFE94', '\uFE93', '\uFE94'],
+      'ء' => ['\uFE80', '\uFE80', '\uFE80', '\uFE80'],
+    ];
+
+    // Lam-Alef Ligatures
+    $word = str_replace(['لأ', 'لإ', 'لآ', 'لا'], ['\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB'], $word);
+
+    // Helper to check if a character joins to the left
+    $canJoinLeft = function ($char) use ($glyphs) {
+      $nonLeftJoiners = ['ا', 'أ', 'إ', 'آ', 'ٱ', 'د', 'ذ', 'ر', 'ز', 'و', 'ء', 'ة', '\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB'];
+      return isset($glyphs[$char]) && !in_array($char, $nonLeftJoiners);
+    };
+
+    preg_match_all('/./us', $word, $chars);
+    $chars = $chars[0];
+    $count = count($chars);
+    $shaped = [];
+
+    for ($i = 0; $i < $count; $i++) {
+      $char = $chars[$i];
+      if (!isset($glyphs[$char])) {
+        $shaped[] = $char;
+        continue;
+      }
+
+      $prev = ($i > 0) ? $chars[$i - 1] : null;
+      $next = ($i < $count - 1) ? $chars[$i + 1] : null;
+
+      $joinsPrev = ($prev && $canJoinLeft($prev));
+      $joinsNext = ($next && isset($glyphs[$next]) && $canJoinLeft($char));
+
+      if ($joinsPrev && $joinsNext) {
+        $form = 2; // Middle
+      } elseif ($joinsPrev) {
+        $form = 1; // End
+      } elseif ($joinsNext) {
+        $form = 3; // Beginning
+      } else {
+        $form = 0; // Isolated
+      }
+
+      $shaped[] = json_decode('"' . $glyphs[$char][$form] . '"');
+    }
+
+    return implode('', $shaped);
+  }
+
+  protected function prepareArabicText($text)
+  {
+    // No longer used directly, integrated into wrapArabicText
+    return $text;
+  }
+
+  protected function utf8_strrev($str)
+  {
+    preg_match_all('/./us', $str, $ar);
+    return implode('', array_reverse($ar[0]));
   }
 
   /**
@@ -82,67 +299,42 @@ class QuranVideoService
    */
   public function createFinalVideo($audioPath, array $overlayData, $sessionId)
   {
-    $outputPath = Storage::path("videos/output/reels_{$sessionId}.mp4");
-    $bgPath = Storage::path("images/background_{$sessionId}.png");
+    $outputPath = Storage::disk('public')->path("videos/output/reels_{$sessionId}.mp4");
+    $bgPath = Storage::disk('public')->path("images/background_{$sessionId}.png");
 
     // Create a simple gradient background if no image provided
     if (!file_exists($bgPath)) {
-      $cmdBg = "{$this->magick} -size {$this->width}x{$this->height} gradient:'#1a1c2c'-'#4a192c' {$bgPath}";
-      exec($cmdBg);
+      $cmdBg = "{$this->magick} -size {$this->width}x{$this->height} gradient:'#1a1c2c'-'#4a192c' \"{$bgPath}\"";
+      $this->runCommand($cmdBg, "creating background");
     }
 
     $duration = $this->getDuration($audioPath);
 
     // Build FFmpeg command for overlays
-    $filter = "nullsrc=s={$this->width}x{$this->height}:d={$duration} [bg]; ";
-    $filter .= "movie='{$bgPath}' [base]; ";
-
-    $inputs = "";
-    $overlayFilter = "[base]";
-    foreach ($overlayData as $i => $data) {
-      $inputs .= "-i \"{$data['path']}\" ";
-      $start = $data['start'];
-      $end = $data['end'];
-      $overlayFilter .= "[{$i}] overlay=0:0:enable='between(t,{$start},{$end})' [v{$i}]; [v{$i}]";
-    }
-
-    // Remove trailing [vX]
-    $overlayFilter = rtrim($overlayFilter, "; [v" . (count($overlayData) - 1) . "]");
-
-    // For simplicity in this first iteration, let's use a simpler approach if many overlays
-    // This is a complex filter string. For 3-5 ayahs it's fine.
-
-    $finalFilter = "[base]";
-    foreach ($overlayData as $i => $data) {
-      $finalFilter .= " [ovl{$i}] overlay=0:0:enable='between(t,{$data['start']},{$data['end']})' [base];";
-    }
-    $finalFilter = rtrim($finalFilter, " [base];");
-
-    // Final Command
     $overlayInputs = "";
-    foreach ($overlayData as $data) {
-      $overlayInputs .= " -i \"{$data['path']}\"";
-    }
-
-    // Simpler filter logic
     $filterComplex = "";
     $lastLabel = "[0:v]";
-    for ($i = 0; $i < count($overlayData); $i++) {
+
+    foreach ($overlayData as $i => $data) {
+      $overlayInputs .= " -i \"{$data['path']}\"";
       $inputIdx = $i + 1;
-      $start = $overlayData[$i]['start'];
-      $end = $overlayData[$i]['end'];
+      $start = $data['start'];
+      $end = $data['end'];
       $nextLabel = "[v{$i}]";
       $filterComplex .= "{$lastLabel}[{$inputIdx}:v] overlay=0:0:enable='between(t,{$start},{$end})'{$nextLabel}; ";
       $lastLabel = $nextLabel;
     }
     $filterComplex = rtrim($filterComplex, "; ");
 
+    $audioInputIdx = count($overlayData) + 1;
     $command = "{$this->ffmpeg} -y -loop 1 -i \"{$bgPath}\" {$overlayInputs} -i \"{$audioPath}\" " .
       "-filter_complex \"{$filterComplex}\" " .
-      "-map \"{$lastLabel}\" -map " . (count($overlayData) + 1) . ":a -c:v libx264 -t {$duration} -pix_fmt yuv420p {$outputPath}";
+      "-map \"{$lastLabel}\" -map {$audioInputIdx}:a -c:v libx264 -t {$duration} -pix_fmt yuv420p \"{$outputPath}\"";
 
-    exec($command);
+    if ($this->runCommand($command, "final video rendering")) {
+      return $outputPath;
+    }
 
-    return $outputPath;
+    return null;
   }
 }

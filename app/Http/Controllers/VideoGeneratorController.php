@@ -90,7 +90,11 @@ class VideoGeneratorController extends Controller
     // 3. Create Final Video
     $finalVideoPath = $this->videoService->createFinalVideo($mergedAudio, $overlayData, $sessionId);
 
-    $videoUrl = Storage::url('videos/output/' . basename($finalVideoPath));
+    if (!$finalVideoPath || !file_exists($finalVideoPath)) {
+      return back()->with('error', 'Video generation failed. Please check logs for details.');
+    }
+
+    $videoUrl = Storage::disk('public')->url('videos/output/' . basename($finalVideoPath));
 
     return back()->with('success', 'Video generated successfully!')->with('video_url', $videoUrl);
   }
