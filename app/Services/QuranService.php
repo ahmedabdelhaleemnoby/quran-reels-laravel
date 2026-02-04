@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 class QuranService
 {
   protected $baseUrl = 'https://api.alquran.cloud/v1';
-  protected $audioBaseUrl = 'https://cdn.islamic.network/quran/audio/128';
+  protected $audioBaseUrl = 'https://cdn.alquran.cloud/media/audio/ayah';
 
   /**
    * Fetch all available reciters (audio editions).
@@ -62,10 +62,9 @@ class QuranService
    */
   public function downloadAyahAudio($reciterIdentifier, $globalAyahNumber)
   {
-    $fileName = "{$globalAyahNumber}.mp3";
-    $url = "{$this->audioBaseUrl}/{$reciterIdentifier}/{$fileName}";
+    $url = "{$this->audioBaseUrl}/{$reciterIdentifier}/{$globalAyahNumber}";
 
-    $localPath = "audio/{$reciterIdentifier}/{$fileName}";
+    $localPath = "audio/{$reciterIdentifier}/{$globalAyahNumber}.mp3";
 
     if (Storage::exists($localPath)) {
       return Storage::path($localPath);
