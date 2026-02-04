@@ -41,9 +41,12 @@ class QuranVideoService
   protected function getFontPath()
   {
     $fonts = [
+      storage_path('fonts/Amiri-Regular.ttf'),
+      base_path('storage/fonts/Amiri-Regular.ttf'),
       '/Library/Fonts/Amiri-Regular.ttf',
       '/System/Library/Fonts/GeezaPro.ttc',
       '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+      'C:\Windows\Fonts\arial.ttf',
     ];
 
     foreach ($fonts as $font) {
@@ -408,10 +411,8 @@ class QuranVideoService
     if (!$backgroundPath) {
       $bgFilter = "scale={$this->width}:{$this->height}[bg];";
     } elseif ($isImage) {
-      // "Smart Movement" - Ken Burns Effect
-      $fps = 30;
-      $totalFrames = ceil(($duration + 2) * $fps); // Buffer for safety
-      $bgFilter = "scale=w=2160:h=-1,zoompan=z='min(zoom+0.0008,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={$totalFrames}:s={$this->width}x{$this->height}:fps={$fps}[bg];";
+      // Use uploaded image as-is without any scaling or cropping
+      $bgFilter = "null[bg];";
     } else {
       // Video background: Scale and Crop to vertical
       $bgFilter = "scale=w='if(gt(iw/ih,{$this->width}/{$this->height}),-1,{$this->width})':h='if(gt(iw/ih,{$this->width}/{$this->height}),{$this->height},-1)',crop={$this->width}:{$this->height}[bg];";

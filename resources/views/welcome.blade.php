@@ -272,6 +272,15 @@
         <div class="upload-hint">Upload an image for "Smart Movement" or a video background. Max: 50MB.</div>
       </div>
 
+
+      <div class="form-group">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" name="no_text_overlay" id="no_text_overlay" value="1"
+            style="width: auto; cursor: pointer;">
+          <span>فيديو بدون كتابة (Audio & Background Only)</span>
+        </label>
+        <div class="upload-hint">اختر هذا الخيار لإنشاء فيديو بالصوت والخلفية فقط بدون نص الآيات</div>
+      </div>
       <button type="submit">Generate Quran Reel ✨</button>
     </form>
 

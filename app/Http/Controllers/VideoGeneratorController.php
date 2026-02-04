@@ -35,8 +35,8 @@ class VideoGeneratorController extends Controller
    */
   public function generate(Request $request)
   {
-    set_time_limit(300); // Allow up to 5 minutes
-    ini_set('memory_limit', '512M');
+    set_time_limit(600); // Allow up to 10 minutes
+    ini_set('memory_limit', '1024M');
 
     // Initialize progress
     session(['generation_progress' => 0, 'generation_status' => 'Starting...']);
@@ -49,6 +49,7 @@ class VideoGeneratorController extends Controller
       'ayah_to' => 'required|integer|min:1|gte:ayah_from',
       'duration' => 'nullable|integer|min:5|max:60',
       'background' => 'nullable|file|mimes:jpeg,png,jpg,mp4,mov|max:51200', // 50MB
+      'no_text_overlay' => 'nullable|boolean',
     ]);
 
     if ($validator->fails()) {
@@ -72,6 +73,7 @@ class VideoGeneratorController extends Controller
     $surah = $request->surah;
     $from = $request->ayah_from;
     $to = $request->ayah_to;
+    $noTextOverlay = $request->has('no_text_overlay') && $request->no_text_overlay == '1';
 
     // 1. Fetch Ayah Texts
     $ayahs = $this->quranService->getAyahTexts($surah, $from, $to);
@@ -104,15 +106,17 @@ class VideoGeneratorController extends Controller
 
       $duration = $this->videoService->getDuration($path);
 
-      // Generate overlay for this ayah
-      $overlayPath = $this->videoService->generateTextOverlay($ayah['text'], $ayah['numberInSurah'], $sessionId);
+      // Generate overlay for this ayah (skip if no_text_overlay is checked)
+      if (!$noTextOverlay) {
+        $overlayPath = $this->videoService->generateTextOverlay($ayah['text'], $ayah['numberInSurah'], $sessionId);
 
-      $overlayData[] = [
-        'path' => $overlayPath,
-        'start' => $currentTime,
-        'end' => $currentTime + $duration,
-        'text' => $ayah['text']
-      ];
+        $overlayData[] = [
+          'path' => $overlayPath,
+          'start' => $currentTime,
+          'end' => $currentTime + $duration,
+          'text' => $ayah['text']
+        ];
+      }
 
       $audioPaths[] = $path;
       $currentTime += $duration;
