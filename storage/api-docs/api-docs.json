@@ -1,0 +1,1408 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "HRM Platform API",
+        "description": "API documentation for HRM Platform",
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/api/v1/attendance": {
+            "get": {
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Get attendance list",
+                "operationId": "80bc2b0de0387d9c48699a2b62f02e3f",
+                "responses": {
+                    "200": {
+                        "description": "Attendance records List"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/attendance/clock-in": {
+            "post": {
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Clock in current user",
+                "operationId": "7fa3546757b447c76dcd375751727497",
+                "responses": {
+                    "200": {
+                        "description": "Clocked in successfully"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/attendance/clock-out": {
+            "post": {
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Clock out current user",
+                "operationId": "777ea15fee08b2fad0fcd21d149cd901",
+                "responses": {
+                    "200": {
+                        "description": "Clocked out successfully"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/attendance/{id}": {
+            "put": {
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Update attendance record",
+                "operationId": "1b914441839e3b12657e50fd049f966a",
+                "responses": {
+                    "200": {
+                        "description": "Updated successfully"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/auth/login": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Authenticate user and return token",
+                "operationId": "9d0bb5c770cbec19b0b9566606ef4adb",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "admin@democorp.com"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "example": "password"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful login",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "access_token": {
+                                                    "type": "string"
+                                                },
+                                                "user": {
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/logout": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Logout user and invalidate token",
+                "operationId": "3a27a9e02ceb521eb3f98c8d2394aef9",
+                "responses": {
+                    "200": {
+                        "description": "Successful logout",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Logged out successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/auth/me": {
+            "get": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Get current authenticated user info",
+                "operationId": "977b4c6ae719573443219b77bfdf3593",
+                "responses": {
+                    "200": {
+                        "description": "User details",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/auth/profile": {
+            "put": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Update current user profile info",
+                "operationId": "5ffe4ccbf58aa63eefab0745010c263f",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "John Doe"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "john@example.com"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Profile updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/auth/notification-settings": {
+            "put": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Update current user notification settings",
+                "operationId": "f88220d5267b907664186977dad72da1",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "settings": {
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Settings updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/auth/forgot-password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Send password reset link",
+                "operationId": "4011ca27431b5cd53a225688e531de47",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "admin@democorp.com"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Reset link sent"
+                    },
+                    "404": {
+                        "description": "User not found"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/reset-password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Reset password using token",
+                "operationId": "aba7a33c4064b5b1a2f3a8a70c20094b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "token",
+                                    "email",
+                                    "password",
+                                    "password_confirmation"
+                                ],
+                                "properties": {
+                                    "token": {
+                                        "type": "string"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password"
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string",
+                                        "format": "password"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Password reset successful"
+                    },
+                    "400": {
+                        "description": "Invalid token or expired"
+                    }
+                }
+            }
+        },
+        "/api/v1/dashboard/stats": {
+            "get": {
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Get dashboard statistics",
+                "operationId": "00464eac0b2daa2b7dfd173ce52781f0",
+                "responses": {
+                    "200": {
+                        "description": "Dashboard stats",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/employees": {
+            "get": {
+                "tags": [
+                    "Employees"
+                ],
+                "summary": "Get list of all employees",
+                "operationId": "326f2e86fa40a9ba88b1cb5f2d4b62b8",
+                "responses": {
+                    "200": {
+                        "description": "List of employees",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/employees/{id}": {
+            "get": {
+                "tags": [
+                    "Employees"
+                ],
+                "summary": "Get employee details",
+                "operationId": "b7cb6100cedcac60d8c23d3f9d7c3251",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Employee details"
+                    },
+                    "404": {
+                        "description": "Employee not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/leaves/types": {
+            "get": {
+                "tags": [
+                    "Leaves"
+                ],
+                "summary": "Get all leave types",
+                "operationId": "78ea2d82b3dc761e16d5e6342863ab48",
+                "responses": {
+                    "200": {
+                        "description": "Leave types list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/leaves": {
+            "get": {
+                "tags": [
+                    "Leaves"
+                ],
+                "summary": "Get leave requests",
+                "operationId": "cf3dbd0161e5e14d0e14c12e8e928fe3",
+                "responses": {
+                    "200": {
+                        "description": "Leave requests list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Leaves"
+                ],
+                "summary": "Create a leave request",
+                "operationId": "dcca8df053754c49c6d66bfee9cee011",
+                "responses": {
+                    "200": {
+                        "description": "Leave request created"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/leaves/{id}": {
+            "put": {
+                "tags": [
+                    "Leaves"
+                ],
+                "summary": "Update/Approve/Reject leave request",
+                "operationId": "b1b46a5ebe5a311805741ae96d8f6056",
+                "responses": {
+                    "200": {
+                        "description": "Leave request updated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/onboarding/templates": {
+            "get": {
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Get onboarding templates",
+                "operationId": "e60dd2ea73a01ff73d2e49d6b92259ae",
+                "responses": {
+                    "200": {
+                        "description": "Templates list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Create an onboarding template",
+                "operationId": "baabdaf8d5772be7f7a39e0ce2a3b4bc",
+                "responses": {
+                    "200": {
+                        "description": "Template created"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/onboarding/checklists": {
+            "get": {
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Get onboarding checklists",
+                "operationId": "f826a0031b50f78e1777e9b1b71dec04",
+                "responses": {
+                    "200": {
+                        "description": "Checklists list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Create an onboarding checklist for an employee",
+                "operationId": "9e2e28caf58bb61093f71da161912c10",
+                "responses": {
+                    "200": {
+                        "description": "Checklist created"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/onboarding/tasks": {
+            "get": {
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Get tasks for a checklist",
+                "operationId": "ceffcc7fc7bbc978188eaae8f0980614",
+                "responses": {
+                    "200": {
+                        "description": "Tasks list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Add a task to a checklist",
+                "operationId": "a8d1d16557a73d7187a114b59b0dd4be",
+                "responses": {
+                    "200": {
+                        "description": "Task added"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/onboarding/tasks/{id}": {
+            "put": {
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Update a task (mark complete, etc.)",
+                "operationId": "9a1ef43c00d25b13eb6fbaa6eb3ee14e",
+                "responses": {
+                    "200": {
+                        "description": "Task updated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/onboarding/summary": {
+            "get": {
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Get onboarding dashboard summary",
+                "operationId": "5a313ad31de026c4f0f837f1086afb8d",
+                "responses": {
+                    "200": {
+                        "description": "Onboarding summary"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/payroll/periods": {
+            "get": {
+                "tags": [
+                    "Payroll"
+                ],
+                "summary": "Get all payroll periods",
+                "operationId": "dfc959b9616bddbf2d70e0fffd9ca940",
+                "responses": {
+                    "200": {
+                        "description": "Payroll periods list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Payroll"
+                ],
+                "summary": "Create a new payroll period",
+                "operationId": "93e36f64d1a2769f71e87cdfa525e756",
+                "responses": {
+                    "200": {
+                        "description": "Payroll period created"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/payroll/records": {
+            "get": {
+                "tags": [
+                    "Payroll"
+                ],
+                "summary": "Get payroll records",
+                "operationId": "d50a096a940e53afcd4f50edabccf6f5",
+                "responses": {
+                    "200": {
+                        "description": "Payroll records list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/payroll/calculate": {
+            "post": {
+                "tags": [
+                    "Payroll"
+                ],
+                "summary": "Calculate payroll for a period",
+                "operationId": "6c6393ce727e8f8096a36f0bd14449f5",
+                "responses": {
+                    "200": {
+                        "description": "Payroll calculated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/payroll/my-payslips": {
+            "get": {
+                "tags": [
+                    "Payroll"
+                ],
+                "summary": "Get current user payslips",
+                "operationId": "ff788b471f88268e7f6d6d0d17846d55",
+                "responses": {
+                    "200": {
+                        "description": "User payslips"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/payroll/periods/{id}/approve": {
+            "put": {
+                "tags": [
+                    "Payroll"
+                ],
+                "summary": "Approve a payroll period",
+                "operationId": "6de4f9be9e04838332d86ceb809de3fd",
+                "responses": {
+                    "200": {
+                        "description": "Payroll period approved"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/payroll/records/{id}/pdf": {
+            "get": {
+                "tags": [
+                    "Payroll"
+                ],
+                "summary": "Download a payslip as PDF",
+                "operationId": "45def8fcbb7f7415fc700e22aa66041f",
+                "responses": {
+                    "200": {
+                        "description": "Payslip PDF"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Payslip not found"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/performance/reviews": {
+            "get": {
+                "tags": [
+                    "Performance"
+                ],
+                "summary": "Get performance reviews",
+                "operationId": "071386bcef1cec60f16125864dad10fb",
+                "responses": {
+                    "200": {
+                        "description": "Performance reviews list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Performance"
+                ],
+                "summary": "Create a performance review",
+                "operationId": "d8853b05ede8739dded7f4c905cc5b24",
+                "responses": {
+                    "200": {
+                        "description": "Performance review created"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/performance/reviews/{id}": {
+            "put": {
+                "tags": [
+                    "Performance"
+                ],
+                "summary": "Update a performance review",
+                "operationId": "2495c0562e2b9f836455de35c869a707",
+                "responses": {
+                    "200": {
+                        "description": "Performance review updated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/performance/okrs": {
+            "get": {
+                "tags": [
+                    "Performance"
+                ],
+                "summary": "Get OKRs",
+                "operationId": "8a4888db43973a07337fe1f0de5ad257",
+                "responses": {
+                    "200": {
+                        "description": "OKRs list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Performance"
+                ],
+                "summary": "Create an OKR",
+                "operationId": "9a926dc32ba52fde0aba6d70380e30c9",
+                "responses": {
+                    "200": {
+                        "description": "OKR created"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/performance/okrs/{id}": {
+            "put": {
+                "tags": [
+                    "Performance"
+                ],
+                "summary": "Update an OKR",
+                "operationId": "290570be65cb25cd12c866fe1d5ce037",
+                "responses": {
+                    "200": {
+                        "description": "OKR updated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/performance/goals": {
+            "get": {
+                "tags": [
+                    "Performance"
+                ],
+                "summary": "Get goals",
+                "operationId": "1e97577826e356ff0063af09029a1f5a",
+                "responses": {
+                    "200": {
+                        "description": "Goals list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Performance"
+                ],
+                "summary": "Create a goal",
+                "operationId": "923b0840a87560ae02e20f020d5bb4aa",
+                "responses": {
+                    "200": {
+                        "description": "Goal created"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/performance/goals/{id}": {
+            "put": {
+                "tags": [
+                    "Performance"
+                ],
+                "summary": "Update a goal",
+                "operationId": "83d6d3e95aebcf39bec84d244c9ef4e3",
+                "responses": {
+                    "200": {
+                        "description": "Goal updated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/performance/summary": {
+            "get": {
+                "tags": [
+                    "Performance"
+                ],
+                "summary": "Get performance summary for dashboard",
+                "operationId": "99a447c714081dd79682af6fc3ba5501",
+                "responses": {
+                    "200": {
+                        "description": "Performance summary"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/recruitment/jobs": {
+            "get": {
+                "tags": [
+                    "Recruitment"
+                ],
+                "summary": "Get all job postings",
+                "operationId": "c9a661afc0a77ed20dec12b697fc3fbf",
+                "responses": {
+                    "200": {
+                        "description": "Job postings list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Recruitment"
+                ],
+                "summary": "Create a job posting",
+                "operationId": "062f16fa01c3082e1dee2bfb3793be29",
+                "responses": {
+                    "200": {
+                        "description": "Job posting created"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/recruitment/jobs/{id}": {
+            "put": {
+                "tags": [
+                    "Recruitment"
+                ],
+                "summary": "Update a job posting",
+                "operationId": "aab737f363fc0aa080253bdf547bb008",
+                "responses": {
+                    "200": {
+                        "description": "Job posting updated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/recruitment/candidates": {
+            "get": {
+                "tags": [
+                    "Recruitment"
+                ],
+                "summary": "Get all candidates",
+                "operationId": "be6e6f141d71156fbe55a72ae6b7ee7d",
+                "responses": {
+                    "200": {
+                        "description": "Candidates list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Recruitment"
+                ],
+                "summary": "Create a candidate",
+                "operationId": "85e2ca6e5f6f6c06f734ed9dbd0b65fe",
+                "responses": {
+                    "200": {
+                        "description": "Candidate created"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/recruitment/applications": {
+            "get": {
+                "tags": [
+                    "Recruitment"
+                ],
+                "summary": "Get all applications",
+                "operationId": "8436a88c2a94996763ba6cff20c13761",
+                "responses": {
+                    "200": {
+                        "description": "Applications list"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Recruitment"
+                ],
+                "summary": "Create an application",
+                "operationId": "57dbf45dd273d6385252538a647117c4",
+                "responses": {
+                    "200": {
+                        "description": "Application created"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/recruitment/applications/{id}": {
+            "put": {
+                "tags": [
+                    "Recruitment"
+                ],
+                "summary": "Update application (move stage, rate, etc.)",
+                "operationId": "14560c3b1443a1e04a293feb6ed32179",
+                "responses": {
+                    "200": {
+                        "description": "Application updated"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/recruitment/summary": {
+            "get": {
+                "tags": [
+                    "Recruitment"
+                ],
+                "summary": "Get recruitment dashboard summary",
+                "operationId": "995540cd072c04e2a3bf11dba66e0747",
+                "responses": {
+                    "200": {
+                        "description": "Recruitment summary"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/reports/employees": {
+            "get": {
+                "tags": [
+                    "Reports"
+                ],
+                "summary": "Get employee demographics and department distribution",
+                "operationId": "cdeb74bf2ded4013b050b2a3057baaea",
+                "responses": {
+                    "200": {
+                        "description": "Employee reports data"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/reports/attendance": {
+            "get": {
+                "tags": [
+                    "Reports"
+                ],
+                "summary": "Get attendance trends",
+                "operationId": "32ed80edce3b349ded365c8acb8f7991",
+                "responses": {
+                    "200": {
+                        "description": "Attendance reports data"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/reports/payroll": {
+            "get": {
+                "tags": [
+                    "Reports"
+                ],
+                "summary": "Get payroll expense analytics",
+                "operationId": "76da8c0fd42f0d95d5470c11ede957e1",
+                "responses": {
+                    "200": {
+                        "description": "Payroll reports data"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/reports/recruitment": {
+            "get": {
+                "tags": [
+                    "Reports"
+                ],
+                "summary": "Get recruitment and ATS metrics",
+                "operationId": "326762882bcac3c72ec9433800e2bc36",
+                "responses": {
+                    "200": {
+                        "description": "Recruitment reports data"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/test": {
+            "get": {
+                "tags": [
+                    "System"
+                ],
+                "summary": "Check if API is working",
+                "operationId": "65bfe33aca0e714948b3454f205cfe73",
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "API is working!"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "servers": [
+                    {
+                        "url": "http://localhost:8000",
+                        "description": "Local Server"
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "sanctum": {
+                "type": "apiKey",
+                "description": "Enter token in format (Bearer <token>)",
+                "name": "Authorization",
+                "in": "header"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Attendance",
+            "description": "Attendance"
+        },
+        {
+            "name": "Authentication",
+            "description": "Authentication"
+        },
+        {
+            "name": "Dashboard",
+            "description": "Dashboard"
+        },
+        {
+            "name": "Employees",
+            "description": "Employees"
+        },
+        {
+            "name": "Leaves",
+            "description": "Leaves"
+        },
+        {
+            "name": "Onboarding",
+            "description": "Onboarding"
+        },
+        {
+            "name": "Payroll",
+            "description": "Payroll"
+        },
+        {
+            "name": "Performance",
+            "description": "Performance"
+        },
+        {
+            "name": "Recruitment",
+            "description": "Recruitment"
+        },
+        {
+            "name": "Reports",
+            "description": "Reports"
+        },
+        {
+            "name": "System",
+            "description": "System"
+        }
+    ]
+}
