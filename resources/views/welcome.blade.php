@@ -244,7 +244,8 @@
           @foreach($surahs as $surah)
             <option value="{{ $surah['number'] }}" data-verses="{{ $surah['numberOfAyahs'] }}">{{ $surah['number'] }}.
               {{ $surah['name'] }}
-              ({{ $surah['englishName'] }})</option>
+              ({{ $surah['englishName'] }})
+            </option>
           @endforeach
         </select>
       </div>
@@ -252,11 +253,11 @@
       <div class="grid">
         <div class="form-group">
           <label for="ayah_from">من الآية (From Ayah)</label>
-          <input type="number" name="ayah_from" id="ayah_from" min="1" value="1" required>
+          <input type="number" name="ayah_from" id="ayah_from" min="1" max="286" value="1" required>
         </div>
         <div class="form-group">
           <label for="ayah_to">إلى الآية (To Ayah)</label>
-          <input type="number" name="ayah_to" id="ayah_to" min="1" value="1" required>
+          <input type="number" name="ayah_to" id="ayah_to" min="1" max="286" value="1" required>
         </div>
       </div>
 
@@ -300,12 +301,14 @@
   </div>
 
   <script>
+    const ayahFromInput = document.getElementById('ayah_from');
+    const ayahToInput = document.getElementById('ayah_to');
+    const surahSelect = document.getElementById('surah');
+
     // Update ayah_to max value based on selected surah
-    document.getElementById('surah').addEventListener('change', function () {
+    surahSelect.addEventListener('change', function () {
       const selectedOption = this.options[this.selectedIndex];
       const numberOfAyahs = selectedOption.getAttribute('data-verses');
-      const ayahToInput = document.getElementById('ayah_to');
-      const ayahFromInput = document.getElementById('ayah_from');
 
       if (numberOfAyahs) {
         ayahToInput.setAttribute('max', numberOfAyahs);
@@ -318,6 +321,35 @@
         if (parseInt(ayahFromInput.value) > parseInt(numberOfAyahs)) {
           ayahFromInput.value = numberOfAyahs;
         }
+      }
+    });
+
+    // Prevent typing numbers beyond max while typing
+    ayahFromInput.addEventListener('input', function () {
+      const max = parseInt(this.getAttribute('max'));
+      const value = parseInt(this.value);
+
+      if (max && value > max) {
+        this.value = max;
+      }
+
+      // Prevent negative numbers
+      if (value < 1) {
+        this.value = 1;
+      }
+    });
+
+    ayahToInput.addEventListener('input', function () {
+      const max = parseInt(this.getAttribute('max'));
+      const value = parseInt(this.value);
+
+      if (max && value > max) {
+        this.value = max;
+      }
+
+      // Prevent negative numbers
+      if (value < 1) {
+        this.value = 1;
       }
     });
 
