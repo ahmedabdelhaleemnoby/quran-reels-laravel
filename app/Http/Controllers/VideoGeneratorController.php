@@ -35,6 +35,9 @@ class VideoGeneratorController extends Controller
    */
   public function generate(Request $request)
   {
+    set_time_limit(300); // Allow up to 5 minutes
+    ini_set('memory_limit', '512M');
+
     $request->validate([
       'reciter' => 'required|string',
       'surah' => 'required|integer|min:1|max:114',
