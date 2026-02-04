@@ -242,7 +242,8 @@
         <select name="surah" id="surah" required>
           <option value="">Choose a surah...</option>
           @foreach($surahs as $surah)
-            <option value="{{ $surah['number'] }}">{{ $surah['number'] }}. {{ $surah['name'] }}
+            <option value="{{ $surah['number'] }}" data-verses="{{ $surah['numberOfAyahs'] }}">{{ $surah['number'] }}.
+              {{ $surah['name'] }}
               ({{ $surah['englishName'] }})</option>
           @endforeach
         </select>
@@ -255,7 +256,7 @@
         </div>
         <div class="form-group">
           <label for="ayah_to">إلى الآية (To Ayah)</label>
-          <input type="number" name="ayah_to" id="ayah_to" min="1" value="3" required>
+          <input type="number" name="ayah_to" id="ayah_to" min="1" value="1" required>
         </div>
       </div>
 
@@ -299,6 +300,27 @@
   </div>
 
   <script>
+    // Update ayah_to max value based on selected surah
+    document.getElementById('surah').addEventListener('change', function () {
+      const selectedOption = this.options[this.selectedIndex];
+      const numberOfAyahs = selectedOption.getAttribute('data-verses');
+      const ayahToInput = document.getElementById('ayah_to');
+      const ayahFromInput = document.getElementById('ayah_from');
+
+      if (numberOfAyahs) {
+        ayahToInput.setAttribute('max', numberOfAyahs);
+        ayahFromInput.setAttribute('max', numberOfAyahs);
+
+        // If current value exceeds max, reset to max
+        if (parseInt(ayahToInput.value) > parseInt(numberOfAyahs)) {
+          ayahToInput.value = numberOfAyahs;
+        }
+        if (parseInt(ayahFromInput.value) > parseInt(numberOfAyahs)) {
+          ayahFromInput.value = numberOfAyahs;
+        }
+      }
+    });
+
     document.getElementById('generator-form').addEventListener('submit', async function (e) {
       e.preventDefault();
 
@@ -340,9 +362,9 @@
         });
 
         clearInterval(pollInterval); // Stop polling on response
-        
+
         console.log('Response status:', response.status); // Debug log
-        
+
         // Check if response is OK
         if (!response.ok) {
           console.error('HTTP error! status:', response.status);
