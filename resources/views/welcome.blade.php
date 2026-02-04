@@ -139,6 +139,63 @@
       font-size: 0.875rem;
       color: #64748b;
     }
+
+    /* Progress Overlay */
+    #progress-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      color: white;
+      backdrop-filter: blur(8px);
+    }
+
+    /* Circular Loader */
+    .loader {
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid var(--accent);
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    #progress-text {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-top: 10px;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .progress-status {
+      margin-top: 15px;
+      font-size: 1.1rem;
+      color: #cbd5e1;
+    }
+
+    .upload-hint {
+      font-size: 0.8rem;
+      color: #71717a;
+      margin-top: 4px;
+    }
   </style>
 </head>
 
@@ -168,7 +225,7 @@
       </div>
     @endif
 
-    <form action="{{ route('generator.generate') }}" method="POST">
+    <form action="{{ route('generator.generate') }}" method="POST" enctype="multipart/form-data" id="generator-form">
       @csrf
       <div class="form-group">
         <label for="reciter">القارئ (Reciter)</label>
@@ -207,6 +264,12 @@
         <input type="number" name="duration" id="duration" min="5" max="60" value="30">
       </div>
 
+      <div class="form-group">
+        <label for="background">خلفية مخصصة (Custom Background - Image/Video)</label>
+        <input type="file" name="background" id="background" accept="image/*,video/*">
+        <div class="upload-hint">Upload an image for "Smart Movement" or a video background. Max: 50MB.</div>
+      </div>
+
       <button type="submit">Generate Quran Reel ✨</button>
     </form>
 
@@ -228,6 +291,104 @@
       Built for the love of Quran 🌙
     </div>
   </div>
+
+  <!-- Progress Overlay -->
+  <div id="progress-overlay">
+    <div class="loader"></div>
+    <div id="progress-text">0%</div>
+    <div class="progress-status" id="progress-status">Preparing recitation...</div>
+  </div>
+
+  <script>
+    document.getElementById('generator-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const overlay = document.getElementById('progress-overlay');
+      const progressText = document.getElementById('progress-text');
+      const progressStatus = document.getElementById('progress-status');
+
+      // Reset UI
+      overlay.style.display = 'flex';
+      progressText.innerText = '0%';
+      progressStatus.innerText = 'Initializing...';
+
+      const formData = new FormData(this);
+
+      try {
+        // Start polling immediately
+        let progress = 0;
+        const pollInterval = setInterval(async () => {
+          try {
+            const res = await fetch('{{ route("generator.progress") }}');
+            const data = await res.json();
+
+            if (data.progress !== undefined) {
+              progress = data.progress;
+              progressText.innerText = Math.round(progress) + '%';
+              if (data.status) progressStatus.innerText = data.status;
+            }
+          } catch (err) {
+            console.error("Polling error:", err);
+          }
+        }, 1500);
+
+        // Submit form via AJAX
+        const response = await fetch('{{ route("generator.generate") }}', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest', // Inform Laravel it's AJAX
+            'Accept': 'application/json'
+          }
+        });
+
+        clearInterval(pollInterval); // Stop polling on response
+
+        const result = await response.json();
+
+        if (result.success && result.video_url) {
+          progressText.innerText = '100%';
+          progressStatus.innerText = 'Done!';
+
+          // Wait a moment then show video
+          setTimeout(() => {
+            overlay.style.display = 'none';
+
+            // Dynamically insert video preview
+            const container = document.querySelector('.container');
+            let preview = document.querySelector('.video-preview');
+            if (preview) preview.remove();
+
+            const previewHtml = `
+                  <div class="video-preview">
+                    <h3>Your Generated Reel</h3>
+                    <video controls autoplay>
+                      <source src="${result.video_url}" type="video/mp4">
+                      Your browser does not support the video tag.
+                    </video>
+                    <p style="margin-top: 10px;">
+                      <a href="${result.video_url}" download
+                        style="color: var(--primary); font-weight: 600; text-decoration: none;">⬇️ Download Video</a>
+                    </p>
+                  </div>
+                `;
+
+            const footer = document.querySelector('.footer');
+            footer.insertAdjacentHTML('beforebegin', previewHtml);
+          }, 1000);
+        } else {
+          overlay.style.display = 'none';
+          alert('Error: ' + (result.message || 'Unknown error occurred'));
+        }
+
+      } catch (error) {
+        console.error('Submission error:', error);
+        overlay.style.display = 'none';
+        alert('An unexpected error occurred. Please try again.');
+        location.reload();
+      }
+    });
+  </script>
 </body>
 
 </html>

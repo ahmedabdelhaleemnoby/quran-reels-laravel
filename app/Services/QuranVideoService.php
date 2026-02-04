@@ -27,7 +27,7 @@ class QuranVideoService
 
   protected function ensureDirectoriesExist()
   {
-    $directories = ['audio', 'images', 'videos/output'];
+    $directories = ['audio', 'images', 'videos/output', 'backgrounds'];
     foreach ($directories as $dir) {
       if (!Storage::disk('public')->exists($dir)) {
         Storage::disk('public')->makeDirectory($dir);
@@ -352,49 +352,73 @@ class QuranVideoService
   /**
    * Create final video by combining background, audio, and sync'd overlays.
    */
-  public function createFinalVideo($audioPath, array $overlayData, $sessionId)
+  public function createFinalVideo($audioPath, array $overlayData, $sessionId, $backgroundPath = null)
   {
     $this->ensureDirectoriesExist();
 
     $outputPath = Storage::disk('public')->path("videos/output/reels_{$sessionId}.mp4");
 
-    // Get a random nature background
-    $backgroundPath = $this->getNatureBackground($sessionId);
+    // Use provided background or fetch a random nature one
+    if (!$backgroundPath) {
+      $backgroundPath = $this->getNatureBackground($sessionId);
+    }
+
+    $isImage = true;
+    if ($backgroundPath) {
+      $mime = mime_content_type($backgroundPath);
+      $isImage = strpos($mime, 'image') !== false;
+    }
 
     $backgroundInput = "";
-    $bgInputIndex = 0; // Index for the background video stream
+    $bgInputIndex = 0;
+
     if (!$backgroundPath) {
-      Log::warning("Could not fetch nature background, using solid color fallback.");
-      // Use lavfi color source as input 0
-      $backgroundInput = "-f lavfi -i color=c=black:s={$this->width}x{$this->height}:d=1000"; // Placeholder duration, will be cut by -shortest
-      $bgInputIndex = 0;
+      Log::warning("No background available, using solid color fallback.");
+      $backgroundInput = "-f lavfi -i color=c=black:s={$this->width}x{$this->height}:d=1000";
     } else {
-      // Use image as input 0
-      $backgroundInput = "-loop 1 -i \"{$backgroundPath}\"";
-      $bgInputIndex = 0;
+      if ($isImage) {
+        $backgroundInput = "-loop 1 -i \"{$backgroundPath}\"";
+      } else {
+        // Video background: loop it
+        $backgroundInput = "-stream_loop -1 -i \"{$backgroundPath}\"";
+      }
     }
 
     $duration = $this->getDuration($audioPath);
 
-    // Build FFmpeg command for overlays
+    // Build FFmpeg complex filter
+    // 1. Prepare Background (Scale/Crop/Animate)
+    $bgFilter = "";
+    if (!$backgroundPath) {
+      $bgFilter = "scale={$this->width}:{$this->height}[bg];";
+    } elseif ($isImage) {
+      // "Smart Movement" - Ken Burns Effect
+      $fps = 30;
+      $totalFrames = ceil(($duration + 2) * $fps); // Buffer for safety
+      $bgFilter = "scale=w=2160:h=-1,zoompan=z='min(zoom+0.0008,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={$totalFrames}:s={$this->width}x{$this->height}:fps={$fps}[bg];";
+    } else {
+      // Video background: Scale and Crop to vertical
+      $bgFilter = "scale=w='if(gt(iw/ih,{$this->width}/{$this->height}),-1,{$this->width})':h='if(gt(iw/ih,{$this->width}/{$this->height}),{$this->height},-1)',crop={$this->width}:{$this->height}[bg];";
+    }
+
     $overlayInputs = "";
-    $filterComplex = "";
-    $lastLabel = "[{$bgInputIndex}:v]"; // Start with the background video stream
+    $overlayFilters = "";
+    $lastLabel = "[bg]";
 
-    // Audio input will be at index 1
-    $audioInputIdx = 1;
-
-    // Overlays start from input index 2
     foreach ($overlayData as $i => $data) {
-      $inputIdx = $i + 2; // +2 because 0 is background, 1 is audio
+      $inputIdx = $i + 2;
       $overlayInputs .= " -loop 1 -i \"{$data['path']}\"";
       $start = $data['start'];
       $end = $data['end'];
       $nextLabel = "[v{$i}]";
-      $filterComplex .= "{$lastLabel}[{$inputIdx}:v]overlay=(W-w)/2:(H-h)/2:enable='between(t,{$start},{$end})'{$nextLabel}; ";
+      $overlayFilters .= "{$lastLabel}[{$inputIdx}:v]overlay=(W-w)/2:(H-h)/2:enable='between(t,{$start},{$end})'{$nextLabel}; ";
       $lastLabel = $nextLabel;
     }
+
+    $filterComplex = $bgFilter . $overlayFilters;
     $filterComplex = rtrim($filterComplex, "; ");
+
+    $audioInputIdx = 1;
 
     $command = "{$this->ffmpeg} -y " .
       "{$backgroundInput} " .
