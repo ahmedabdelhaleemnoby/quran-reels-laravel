@@ -61,7 +61,7 @@ class VideoGeneratorController extends Controller
     $currentTime = 0;
 
     foreach ($ayahs as $ayah) {
-      $path = $this->quranService->downloadAyahAudio($reciter, $surah, $ayah['numberInSurah']);
+      $path = $this->quranService->downloadAyahAudio($reciter, $ayah['number']);
       if (!$path)
         continue;
 
