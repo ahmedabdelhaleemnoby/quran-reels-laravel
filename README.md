@@ -1,80 +1,101 @@
-# Quran Reels Generator
+# 📖 Quran Reels Generator
 
-A Laravel 12.0 application that generates high-quality Quran recitation reels for social media (TikTok, Instagram, YouTube Shorts).
+[![Laravel Version](https://img.shields.io/badge/Laravel-12.0-red.svg)](https://laravel.com)
+[![PHP Version](https://img.shields.io/badge/PHP-8.4-777bb4.svg)](https://php.net)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![FFmpeg](https://img.shields.io/badge/Engine-FFmpeg-green.svg)](https://ffmpeg.org)
 
-## 🚀 Features
+A powerful Laravel 12.0 application designed to generate high-quality Quran recitation reels for social media platforms like TikTok, Instagram, and YouTube Shorts.
 
-- **Reciter Selection**: Access to a wide range of Quran reciters via the Al Quran Cloud API.
-- **Surah & Ayah Customization**: Select specific Surahs and Ayah ranges for video generation.
-- **Automated Video Processing**: 
-  - Dynamic Arabic text overlays with beautiful typography (Amiri font).
-  - High-quality audio fetching and merging.
-  - Video composition using **FFmpeg** and **ImageMagick**.
-- **Vertical Format**: Generates videos in 1080x1920 format, optimized for mobile platforms.
-- **Arabic RTL Support**: Proper rendering of Quranic text with RTL support and shadows.
+---
+
+## ✨ Features
+
+- **🎯 Reciter Selection**: Choose from 100+ world-renowned reciters via the [Al Quran Cloud API](https://alquran.cloud).
+- **📖 Custom Range**: Select any Surah and Ayah range to create specific thematic reels.
+- **🎨 Premium Visuals**: 
+  - **Ken Burns Effect**: Dynamic zooming and panning for nature backgrounds.
+  - **Elegant Typography**: High-quality Arabic rendering using the **Amiri** font.
+  - **RTL Shadows**: Smooth, readable text with professional-grade drop shadows.
+- **⚡ Automated Pipeline**: 
+  - Instant audio merging.
+  - Real-time text-to-image overlay generation.
+  - Optimized MP4 encoding in vertical **1080x1920** resolution.
+
+---
 
 ## 🛠️ Tech Stack
 
-- **Framework**: Laravel 12.x
-- **Video Engine**: FFmpeg
-- **Image Processing**: ImageMagick
-- **APIs**: Al Quran Cloud (api.alquran.cloud)
-- **Frontend**: Blade + Vanilla CSS (Glassmorphism design)
+- **Backend**: Laravel 12.x (PHP 8.4)
+- **Video Engine**: FFmpeg & FFprobe
+- **Graphics**: ImageMagick (with Pango & Ghostscript support)
+- **Storage**: Laravel File Storage (S3 compatible)
+- **Frontend**: Blade, Vanilla CSS (Glassmorphic UI)
 
-## 📁 Installation
+---
+
+## 🚀 Quick Start (Local)
 
 ### 1. Prerequisites
-
+Ensure you have the following installed:
 - PHP 8.2+
 - Composer 2.x
-- **FFmpeg** installed and accessible in the system path.
-- **ImageMagick** installed with **pango** support (for high-quality Arabic rendering).
-- **Amiri** font installed on the system.
+- FFmpeg & ImageMagick
 
 ### 2. Setup
-
 ```bash
-# Clone the repository
-git clone <repository-url>
+# Clone and Install
+git clone https://github.com/ahmedabdelhaleemnoby/quran-reels-laravel.git
 cd quran-reels-laravel
-
-# Install dependencies
 composer install
 
-# Environment setup
+# Environment
 cp .env.example .env
 php artisan key:generate
 
-# Storage setup
+# Storage Link
 php artisan storage:link
 mkdir -p storage/app/audio storage/app/images storage/app/videos/output
 ```
 
-### 3. Configuration
+---
 
-Update your `.env` file with the paths to your FFmpeg and ImageMagick binaries if they are not in the default system path:
+## 🐳 Docker Setup
 
-```env
-FFMPEG_PATH=/usr/local/bin/ffmpeg
-FFPROBE_PATH=/usr/local/bin/ffprobe
-MAGICK_PATH=/usr/local/bin/magick
-```
-
-### 4. Running
+The project includes a production-ready `Dockerfile` based on Alpine Linux.
 
 ```bash
-php artisan serve
+# Build the image
+docker build -t quran-reels .
+
+# Run the container
+docker run -p 8000:8000 \
+  -v $(pwd)/storage:/var/www/html/storage \
+  --env-file .env \
+  quran-reels
 ```
-
-Access the application at: `http://localhost:8000`
-
-## 📚 How it Works
-
-1. **Fetch Data**: The application fetches surah names and reciter lists from Al Quran Cloud.
-2. **Audio Sync**: Audio files for each ayah are downloaded and their durations calculated.
-3. **Overlay Generation**: ImageMagick creates transparent PNG overlays with the Quranic text.
-4. **Final Render**: FFmpeg combines a background image (or gradient), the merged audio, and the text overlays synced to the audio timing.
 
 ---
 
-**Crafted for Spiritual Engagement**
+## ⚙️ Environment Variables
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `FFMPEG_PATH` | Path to FFmpeg binary | `ffmpeg` |
+| `FFPROBE_PATH` | Path to FFprobe binary | `ffprobe` |
+| `MAGICK_PATH` | Path to ImageMagick binary | `magick` |
+| `APP_RECITER_DEFAULT` | Default reciter identifier | `ar.alafasy` |
+
+---
+
+## 🛠 Troubleshooting
+
+- **Text Rendering**: If Arabic text looks like "boxes", ensure the **Amiri** font is installed on your system.
+  - *Ubuntu*: `sudo apt install fonts-amiri`
+  - *MacOS*: `brew install font-amiri`
+- **FFmpeg Errors**: Verify paths using `which ffmpeg` and update `.env`.
+- **Memory Limit**: For long ayah ranges, ensure `php.ini` has `memory_limit` set to at least `256M`.
+
+---
+
+**Developed for Spiritual Engagement & Social Media Excellence**
