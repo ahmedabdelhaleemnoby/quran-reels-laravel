@@ -295,8 +295,7 @@
   <!-- Progress Overlay -->
   <div id="progress-overlay">
     <div class="loader"></div>
-    <div id="progress-text">0%</div>
-    <div class="progress-status" id="progress-status">Preparing recitation...</div>
+    <div class="progress-status" id="progress-status">يرجي الانتظار جاري انشاء الفيديو...</div>
   </div>
 
   <script>
@@ -310,7 +309,7 @@
       // Reset UI
       overlay.style.display = 'flex';
       progressText.innerText = '0%';
-      progressStatus.innerText = 'Initializing...';
+      progressStatus.innerText = 'يرجي الانتظار جاري انشاء الفيديو...';
 
       const formData = new FormData(this);
 

@@ -126,7 +126,7 @@ class QuranVideoService
     imagefill($image, 0, 0, $transparent);
 
     // 2. Text settings
-    $fontSize = 45;
+    $fontSize = 65; // Increased from 45
     $white = imagecolorallocate($image, 255, 255, 255);
     $black = imagecolorallocatealpha($image, 0, 0, 0, 80); // Shadow
 
@@ -145,9 +145,25 @@ class QuranVideoService
       $y = $startY + ($i * $lineHeight);
 
       // Draw Shadow
-      imagettftext($image, $fontSize, 0, $x + 3, $y + 3, $black, $fontPath, $line);
-      // Draw Text
-      imagettftext($image, $fontSize, 0, $x, $y, $white, $fontPath, $line);
+      imagettftext($image, $fontSize, 0, $x + 4, $y + 4, $black, $fontPath, $line);
+
+      // Draw "Simulated Bold" (Multiple passes with slight offset)
+      // Offsets for thickness: center, +1x, -1x, +1y, -1y
+      $offsets = [
+        [0, 0],
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+        [1, 1],
+        [-1, -1],
+        [1, -1],
+        [-1, 1] // Diagonals for smoother bold
+      ];
+
+      foreach ($offsets as $offset) {
+        imagettftext($image, $fontSize, 0, $x + $offset[0], $y + $offset[1], $white, $fontPath, $line);
+      }
     }
 
     imagepng($image, $outputPath);
