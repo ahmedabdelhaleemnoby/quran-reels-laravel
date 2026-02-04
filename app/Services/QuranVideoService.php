@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Process;
+use GuzzleHttp\Client;
 
 class QuranVideoService
 {
@@ -194,13 +195,33 @@ class QuranVideoService
     return implode(' ', array_reverse($shapedWords));
   }
 
+  /**
+   * Fetch a random nature background image from loremflickr.
+   */
+  protected function getNatureBackground($sessionId)
+  {
+    $url = "https://loremflickr.com/{$this->width}/{$this->height}/nature";
+    $outputPath = Storage::disk('public')->path("images/bg_{$sessionId}.jpg");
+
+    Log::info("Fetching nature background from: {$url}");
+
+    try {
+      $client = new Client();
+      $response = $client->get($url, ['sink' => $outputPath]);
+
+      if ($response->getStatusCode() === 200 && file_exists($outputPath)) {
+        return $outputPath;
+      }
+    } catch (\Exception $e) {
+      Log::error("Failed to fetch nature background: " . $e->getMessage());
+    }
+
+    return null;
+  }
+
   protected function shapeArabicWord($word)
   {
-    // Aggressively remove Tashkeel, Tajweed marks, BOMs, and all control/special whitespace
-    $word = preg_replace('/[\x{064B}-\x{065F}\x{0670}\x{06D6}-\x{06ED}\x{200B}-\x{200F}\x{00A0}\x{FEFF}\x{0000}-\x{001F}]/u', '', $word);
-    $word = trim($word);
-
-    // Initial Glyph Mapping (Isolated => [Isolated, End, Middle, Beginning])
+    // 1. Initial Glyphs and Mapping
     $glyphs = [
       'ا' => ['\uFE8D', '\uFE8E', '\uFE8D', '\uFE8E'],
       'أ' => ['\uFE83', '\uFE84', '\uFE83', '\uFE84'],
@@ -239,32 +260,65 @@ class QuranVideoService
       'ء' => ['\uFE80', '\uFE80', '\uFE80', '\uFE80'],
     ];
 
-    // Lam-Alef Ligatures
+    // 2. Pre-process ligatures (Simplified handling)
     $word = str_replace(['لأ', 'لإ', 'لآ', 'لا'], ['\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB'], $word);
 
-    // Helper to check if a character joins to the left
+    // 3. Regex for Tashkeel and control characters
+    $tashkeelRegex = '/[\x{064B}-\x{065F}\x{0670}\x{06D6}-\x{06ED}]/u';
+    $controlRegex = '/[\x{200B}-\x{200F}\x{00A0}\x{FEFF}\x{0000}-\x{001F}]/u';
+
+    // 4. Tokenize word into segments (base char + following marks)
+    preg_match_all('/./us', $word, $rawChars);
+    $rawChars = $rawChars[0];
+    $segments = [];
+    $currentSegment = null;
+
+    foreach ($rawChars as $char) {
+      // Remove control characters instantly but keep Tashkeel
+      if (preg_match($controlRegex, $char))
+        continue;
+
+      $isBase = isset($glyphs[$char]) || in_array($char, ['\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB']);
+
+      if ($isBase) {
+        if ($currentSegment)
+          $segments[] = $currentSegment;
+        $currentSegment = ['base' => $char, 'marks' => ''];
+      } else {
+        if ($currentSegment) {
+          $currentSegment['marks'] .= $char;
+        } else {
+          // Initial marks if they exist (rare)
+          $segments[] = ['base' => $char, 'marks' => '', 'is_mark_only' => true];
+        }
+      }
+    }
+    if ($currentSegment)
+      $segments[] = $currentSegment;
+
+    // 5. Shaping logic
     $canJoinLeft = function ($char) use ($glyphs) {
       $nonLeftJoiners = ['ا', 'أ', 'إ', 'آ', 'ٱ', 'د', 'ذ', 'ر', 'ز', 'و', 'ء', 'ة', '\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB'];
-      return isset($glyphs[$char]) && !in_array($char, $nonLeftJoiners);
+      return (isset($glyphs[$char]) || in_array($char, ['\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB'])) && !in_array($char, $nonLeftJoiners);
     };
 
-    preg_match_all('/./us', $word, $chars);
-    $chars = $chars[0];
-    $count = count($chars);
-    $shaped = [];
+    $result = '';
+    $count = count($segments);
 
     for ($i = 0; $i < $count; $i++) {
-      $char = $chars[$i];
-      if (!isset($glyphs[$char])) {
-        $shaped[] = $char;
+      $segment = $segments[$i];
+      $char = $segment['base'];
+
+      if (isset($segment['is_mark_only']) || !isset($glyphs[$char])) {
+        $result .= $char . ($segment['marks'] ?? '');
         continue;
       }
 
-      $prev = ($i > 0) ? $chars[$i - 1] : null;
-      $next = ($i < $count - 1) ? $chars[$i + 1] : null;
+      $prevBase = ($i > 0 && !isset($segments[$i - 1]['is_mark_only'])) ? $segments[$i - 1]['base'] : null;
+      $nextBase = ($i < $count - 1 && !isset($segments[$i + 1]['is_mark_only'])) ? $segments[$i + 1]['base'] : null;
 
-      $joinsPrev = ($prev && $canJoinLeft($prev));
-      $joinsNext = ($next && isset($glyphs[$next]) && $canJoinLeft($char));
+      $joinsPrev = ($prevBase && $canJoinLeft($prevBase));
+      $joinsNext = ($nextBase && (isset($glyphs[$nextBase]) || in_array($nextBase, ['\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB'])) && $canJoinLeft($char));
 
       if ($joinsPrev && $joinsNext) {
         $form = 2; // Middle
@@ -276,10 +330,11 @@ class QuranVideoService
         $form = 0; // Isolated
       }
 
-      $shaped[] = json_decode('"' . $glyphs[$char][$form] . '"');
+      $shapedBase = json_decode('"' . $glyphs[$char][$form] . '"');
+      $result .= $shapedBase . $segment['marks'];
     }
 
-    return implode('', $shaped);
+    return $result;
   }
 
   protected function prepareArabicText($text)
@@ -299,13 +354,24 @@ class QuranVideoService
    */
   public function createFinalVideo($audioPath, array $overlayData, $sessionId)
   {
-    $outputPath = Storage::disk('public')->path("videos/output/reels_{$sessionId}.mp4");
-    $bgPath = Storage::disk('public')->path("images/background_{$sessionId}.png");
+    $this->ensureDirectoriesExist();
 
-    // Create a simple gradient background if no image provided
-    if (!file_exists($bgPath)) {
-      $cmdBg = "{$this->magick} -size {$this->width}x{$this->height} gradient:'#1a1c2c'-'#4a192c' \"{$bgPath}\"";
-      $this->runCommand($cmdBg, "creating background");
+    $outputPath = Storage::disk('public')->path("videos/output/reels_{$sessionId}.mp4");
+
+    // Get a random nature background
+    $backgroundPath = $this->getNatureBackground($sessionId);
+
+    $backgroundInput = "";
+    $bgInputIndex = 0; // Index for the background video stream
+    if (!$backgroundPath) {
+      Log::warning("Could not fetch nature background, using solid color fallback.");
+      // Use lavfi color source as input 0
+      $backgroundInput = "-f lavfi -i color=c=black:s={$this->width}x{$this->height}:d=1000"; // Placeholder duration, will be cut by -shortest
+      $bgInputIndex = 0;
+    } else {
+      // Use image as input 0
+      $backgroundInput = "-loop 1 -i \"{$backgroundPath}\"";
+      $bgInputIndex = 0;
     }
 
     $duration = $this->getDuration($audioPath);
@@ -313,28 +379,38 @@ class QuranVideoService
     // Build FFmpeg command for overlays
     $overlayInputs = "";
     $filterComplex = "";
-    $lastLabel = "[0:v]";
+    $lastLabel = "[{$bgInputIndex}:v]"; // Start with the background video stream
 
+    // Audio input will be at index 1
+    $audioInputIdx = 1;
+
+    // Overlays start from input index 2
     foreach ($overlayData as $i => $data) {
-      $overlayInputs .= " -i \"{$data['path']}\"";
-      $inputIdx = $i + 1;
+      $inputIdx = $i + 2; // +2 because 0 is background, 1 is audio
+      $overlayInputs .= " -loop 1 -i \"{$data['path']}\"";
       $start = $data['start'];
       $end = $data['end'];
       $nextLabel = "[v{$i}]";
-      $filterComplex .= "{$lastLabel}[{$inputIdx}:v] overlay=0:0:enable='between(t,{$start},{$end})'{$nextLabel}; ";
+      $filterComplex .= "{$lastLabel}[{$inputIdx}:v]overlay=(W-w)/2:(H-h)/2:enable='between(t,{$start},{$end})'{$nextLabel}; ";
       $lastLabel = $nextLabel;
     }
     $filterComplex = rtrim($filterComplex, "; ");
 
-    $audioInputIdx = count($overlayData) + 1;
-    $command = "{$this->ffmpeg} -y -loop 1 -i \"{$bgPath}\" {$overlayInputs} -i \"{$audioPath}\" " .
+    $command = "{$this->ffmpeg} -y " .
+      "{$backgroundInput} " .
+      "-i \"{$audioPath}\" " .
+      "{$overlayInputs} " .
       "-filter_complex \"{$filterComplex}\" " .
-      "-map \"{$lastLabel}\" -map {$audioInputIdx}:a -c:v libx264 -t {$duration} -pix_fmt yuv420p \"{$outputPath}\"";
+      "-map \"{$lastLabel}\" -map {$audioInputIdx}:a " .
+      "-c:v libx264 -c:a aac -shortest -pix_fmt yuv420p \"{$outputPath}\"";
 
-    if ($this->runCommand($command, "final video rendering")) {
-      return $outputPath;
+    $success = $this->runCommand($command, "creating final video");
+
+    // Cleanup temporary background
+    if ($backgroundPath && file_exists($backgroundPath)) {
+      Storage::disk('public')->delete("images/bg_{$sessionId}.jpg");
     }
 
-    return null;
+    return $success ? $outputPath : null;
   }
 }
