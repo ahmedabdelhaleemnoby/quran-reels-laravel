@@ -247,6 +247,74 @@
       font-family: 'Inter', sans-serif;
     }
 
+    /* Custom Alert Popup */
+    .custom-alert {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 10000;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(5px);
+    }
+
+    .custom-alert-content {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 30px 40px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      max-width: 500px;
+      animation: popIn 0.3s ease-out;
+    }
+
+    @keyframes popIn {
+      0% {
+        transform: scale(0.8);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    .custom-alert-content h3 {
+      color: white;
+      font-size: 1.5rem;
+      margin-bottom: 15px;
+      font-weight: 700;
+    }
+
+    .custom-alert-content p {
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 1.1rem;
+      margin-bottom: 25px;
+      line-height: 1.6;
+    }
+
+    .custom-alert-btn {
+      background: white;
+      color: #667eea;
+      border: none;
+      padding: 12px 40px;
+      border-radius: 50px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .custom-alert-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
     .progress-status {
       margin-top: 15px;
       font-size: 1.1rem;
@@ -328,9 +396,9 @@
       </div>
 
       <div class="form-group">
-        <label for="background">خلفية مخصصة (Custom Background - Image/Video)</label>
-        <input type="file" name="background" id="background" accept="image/*,video/*">
-        <div class="upload-hint">Upload an image for "Smart Movement" or a video background. Max: 50MB.</div>
+        <label for="background">خلفية مخصصة (Custom Background - Images/Video)</label>
+        <input type="file" name="background[]" id="background" accept="image/*,video/*" multiple>
+        <div class="upload-hint">رفع صورة واحدة أو مجموعة صور (حد أقصى 10 صور - سيتم عرضها بالترتيب) أو فيديو. الحد الأقصى: 50 ميجابايت لكل ملف.</div>
       </div>
 
 
@@ -445,6 +513,32 @@
         this.value = 1;
       }
     });
+
+    // Custom Alert Function
+    function showCustomAlert(message) {
+      const alertDiv = document.createElement('div');
+      alertDiv.className = 'custom-alert';
+      alertDiv.style.display = 'flex';
+      alertDiv.innerHTML = `
+        <div class="custom-alert-content">
+          <h3>⚠️ تنبيه</h3>
+          <p>${message}</p>
+          <button class="custom-alert-btn" onclick="this.closest('.custom-alert').remove()">حسناً</button>
+        </div>
+      `;
+      document.body.appendChild(alertDiv);
+    }
+
+    // Limit background images to maximum 10
+    const backgroundInput = document.getElementById('background');
+    if (backgroundInput) {
+      backgroundInput.addEventListener('change', function(e) {
+        if (this.files.length > 10) {
+          showCustomAlert('الحد الأقصى هو 10 صور فقط. يرجى اختيار 10 صور أو أقل.');
+          this.value = ''; // Clear the selection
+        }
+      });
+    }
 
     document.getElementById('generator-form').addEventListener('submit', async function (e) {
       e.preventDefault();
