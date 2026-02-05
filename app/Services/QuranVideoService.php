@@ -371,11 +371,20 @@ class QuranVideoService
   /**
    * Create final video by combining background, audio, and sync'd overlays.
    */
-  public function createFinalVideo($audioPath, array $overlayData, $sessionId, $backgroundPath = null)
+  public function createFinalVideo($audioPath, array $overlayData, $sessionId, $backgroundPath = null, $surahName = null, $fromAyah = null, $toAyah = null)
   {
     $this->ensureDirectoriesExist();
 
-    $outputPath = Storage::disk('public')->path("videos/output/reels_{$sessionId}.mp4");
+    // Generate descriptive filename
+    $filename = "reels_{$sessionId}.mp4";
+    if ($surahName && $fromAyah && $toAyah) {
+      // Clean surah name for filename (remove special characters)
+      $cleanSurahName = preg_replace('/[^a-zA-Z0-9\x{0600}-\x{06FF}\s_-]/u', '', $surahName);
+      $cleanSurahName = str_replace(' ', '_', $cleanSurahName);
+      $filename = "{$cleanSurahName}_من_{$fromAyah}-{$toAyah}.mp4";
+    }
+
+    $outputPath = Storage::disk('public')->path("videos/output/{$filename}");
 
     // Use provided background or fetch a random nature one
     if (!$backgroundPath) {

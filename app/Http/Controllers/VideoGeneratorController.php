@@ -84,6 +84,10 @@ class VideoGeneratorController extends Controller
       return back()->with('error', 'Could not fetch ayah texts.');
     }
 
+    // Get surah name for filename
+    $surahData = $this->quranService->getSurahInfo($surah);
+    $surahName = $surahData['name'] ?? "سورة_{$surah}";
+
     // 2. Download and Merge Audio
     $audioPaths = [];
     $overlayData = [];
@@ -138,7 +142,7 @@ class VideoGeneratorController extends Controller
     // 3. Create Final Video
     session(['generation_status' => 'Encoding final video (this may take a minute)...', 'generation_progress' => 85]);
     session()->save();
-    $finalVideoPath = $this->videoService->createFinalVideo($mergedAudio, $overlayData, $sessionId, $backgroundPath);
+    $finalVideoPath = $this->videoService->createFinalVideo($mergedAudio, $overlayData, $sessionId, $backgroundPath, $surahName, $from, $to);
 
     session(['generation_progress' => 100, 'generation_status' => 'Success!']);
     session()->save();
