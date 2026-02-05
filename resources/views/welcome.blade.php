@@ -557,24 +557,25 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="text_bg_style">خلفية النص (Text Background)</label>
+            <label for="text_bg_style">نمط خلفية النص (Text Bg Style)</label>
             <select name="text_bg_style" id="text_bg_style">
-              <option value="shadow">ظل (Shadow)</option>
               <option value="none">بدون (None)</option>
-              <option value="letterbox">صندوق (Letter Box)</option>
+              <option value="shadow">ظل (Shadow)</option>
+              <option value="letterbox">صندوق تمييز (Highlight/Box)</option>
             </select>
           </div>
         </div>
 
-        <div id="letterbox-options" style="display: none;">
+        <div id="letterbox-options"
+          style="display: none; background: #e2e8f0; padding: 15px; border-radius: 10px; margin-top: -10px; margin-bottom: 20px;">
           <div class="grid">
             <div class="form-group">
-              <label for="text_bg_color">لون الصندوق (Box Color)</label>
+              <label for="text_bg_color">لون خلفية النص (Box Color)</label>
               <input type="color" name="text_bg_color" id="text_bg_color" value="#000000"
-                style="height: 45px; padding: 5px;">
+                style="height: 45px; padding: 5px; width: 100%;">
             </div>
             <div class="form-group">
-              <label for="text_bg_opacity">شفافية الصندوق (Box Opacity)</label>
+              <label for="text_bg_opacity">شفافية الخلفية (Box Opacity)</label>
               <div class="range-input">
                 <input type="range" name="text_bg_opacity" id="text_bg_opacity" min="0" max="1" step="0.1" value="0.5">
                 <span class="range-value" id="text_bg_opacity_val">0.5</span>
@@ -746,10 +747,14 @@
       triggerPreview(); // Immediate for surah change
     });
 
+    // Define debounced preview before using it
+    const debouncedPreview = debounce(() => triggerPreview());
+
+
     // Font size display update
     const fontSizeVal = document.getElementById('font_size_val');
-    if(fontInput) {
-      fontInput.addEventListener('input', function() {
+    if (fontInput) {
+      fontInput.addEventListener('input', function () {
         fontSizeVal.innerText = this.value;
         debouncedPreview();
       });
@@ -757,16 +762,16 @@
 
     // Event listeners for auto-preview
     [ayahFromInput, ayahToInput, colorInput, lineHeightInput, boldInput, bgStyleInput, bgOpacityInput, positionInput, bgColorInput].forEach(el => {
-      if(el) {
+      if (el) {
         el.addEventListener('change', () => triggerPreview());
-        if(el.type === 'number' || el.type === 'range' || el.type === 'color') {
-           el.addEventListener('input', debouncedPreview);
+        if (el.type === 'number' || el.type === 'range' || el.type === 'color') {
+          el.addEventListener('input', debouncedPreview);
         }
       }
     });
 
     // Background change also triggers preview
-    if(bgInput) {
+    if (bgInput) {
       bgInput.addEventListener('change', () => triggerPreview());
     }
 
@@ -796,9 +801,9 @@
     }
 
     // Preview Logic
-        // Background style change logic
+    // Background style change logic
     if (bgStyleInput) {
-      bgStyleInput.addEventListener('change', function() {
+      bgStyleInput.addEventListener('change', function () {
         const letterboxOptions = document.getElementById('letterbox-options');
         if (this.value === 'letterbox') {
           letterboxOptions.style.display = 'block';
@@ -810,7 +815,7 @@
 
     // Opacity display update
     if (bgOpacityInput) {
-      bgOpacityInput.addEventListener('input', function() {
+      bgOpacityInput.addEventListener('input', function () {
         document.getElementById('text_bg_opacity_val').innerText = this.value;
       });
     }
@@ -830,9 +835,9 @@
       }
     }
 
-async function triggerPreview() {
+    async function triggerPreview() {
       const form = document.getElementById('generator-form');
-      if(!document.getElementById('surah').value) return;
+      if (!document.getElementById('surah').value) return;
 
       const formData = new FormData(form);
       const slideContainer = document.getElementById('slide-container');
@@ -846,6 +851,7 @@ async function triggerPreview() {
           method: 'POST',
           body: formData,
           headers: {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
             'X-Requested-With': 'XMLHttpRequest',
             'Accept': 'application/json'
           }
@@ -875,15 +881,14 @@ async function triggerPreview() {
       }
     }
 
-    const debouncedPreview = debounce(() => triggerPreview());
 
     function showSlide(index) {
       const slides = document.querySelectorAll('.slide-item');
       const dots = document.querySelectorAll('.dot');
       slides.forEach(s => s.classList.remove('active'));
       dots.forEach(d => d.classList.remove('active'));
-      if(slides[index]) slides[index].classList.add('active');
-      if(dots[index]) dots[index].classList.add('active');
+      if (slides[index]) slides[index].classList.add('active');
+      if (dots[index]) dots[index].classList.add('active');
     }
 
     function handleVideoSuccess(videoUrl) {
@@ -920,7 +925,7 @@ async function triggerPreview() {
             const res = await fetch('{{ route("generator.progress") }}');
             const data = await res.json();
             if (data.status) progressStatus.innerText = data.status;
-          } catch (err) {}
+          } catch (err) { }
         }, 1500);
 
         const response = await fetch('{{ route("generator.generate") }}', {
@@ -932,7 +937,7 @@ async function triggerPreview() {
           }
         });
 
-         clearInterval(pollInterva l);
+        clearInterval(pollInterval);
         const result = await response.json();
 
         if (result.success && result.video_url) {
@@ -953,7 +958,7 @@ async function triggerPreview() {
 
     // Initial preview if data exists
     window.addEventListener('load', () => {
-      if(surahSelect.value) triggerPreview();
+      if (surahSelect.value) triggerPreview();
     });
 
     // Share icons placeholders (simplified)
