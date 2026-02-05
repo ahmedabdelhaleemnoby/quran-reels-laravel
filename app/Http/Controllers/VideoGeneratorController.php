@@ -7,6 +7,7 @@ use App\Services\QuranService;
 use App\Services\QuranVideoService;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class VideoGeneratorController extends Controller
 {
@@ -126,6 +127,9 @@ class VideoGeneratorController extends Controller
       }
 
       $audioPaths[] = $path;
+
+      Log::info("Ayah {$ayah['numberInSurah']}: Start={$currentTime}, Duration={$duration}, End=" . ($currentTime + $duration));
+
       $currentTime += $duration;
     }
 

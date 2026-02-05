@@ -450,8 +450,8 @@ class QuranVideoService
       // Overlay inputs start after backgrounds and audio
       $inputIdx = $audioInputIdx + 1 + $i;
       $overlayInputs .= " -loop 1 -i \"{$data['path']}\"";
-      $start = $data['start'];
-      $end = $data['end'];
+      $start = number_format($data['start'], 3, '.', '');
+      $end = number_format($data['end'], 3, '.', '');
       $nextLabel = "[v{$i}]";
       $overlayFilters .= "{$lastLabel}[{$inputIdx}:v]overlay=(W-w)/2:(H-h)/2:enable='between(t,{$start},{$end})'{$nextLabel}; ";
       $lastLabel = $nextLabel;
