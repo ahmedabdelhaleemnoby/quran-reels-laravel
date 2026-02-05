@@ -48,7 +48,8 @@ class VideoGeneratorController extends Controller
       'ayah_from' => 'required|integer|min:1',
       'ayah_to' => 'required|integer|min:1|gte:ayah_from',
       'duration' => 'nullable|integer|min:5|max:60',
-      'background' => 'nullable|file|mimes:jpeg,png,jpg,mp4,mov|max:51200', // 50MB
+      'background' => 'nullable|array|max:10', // Max 10 images
+      'background.*' => 'nullable|file|mimes:jpeg,png,jpg,mp4,mov|max:51200', // 50MB per file
       'no_text_overlay' => 'nullable|boolean',
     ]);
 
@@ -61,13 +62,15 @@ class VideoGeneratorController extends Controller
 
     $sessionId = Str::random(10);
 
-    // Handle background upload
-    $backgroundPath = null;
+    // Handle background uploads (single or multiple)
+    $backgroundPaths = [];
     if ($request->hasFile('background')) {
-      $file = $request->file('background');
-      $fileName = "bg_upload_{$sessionId}." . $file->getClientOriginalExtension();
-      $backgroundPath = $file->storeAs('backgrounds', $fileName, 'public');
-      $backgroundPath = Storage::disk('public')->path($backgroundPath);
+      $files = $request->file('background');
+      foreach ($files as $index => $file) {
+        $fileName = "bg_upload_{$sessionId}_{$index}." . $file->getClientOriginalExtension();
+        $storedPath = $file->storeAs('backgrounds', $fileName, 'public');
+        $backgroundPaths[] = Storage::disk('public')->path($storedPath);
+      }
     }
     $reciter = $request->reciter;
     $surah = $request->surah;
@@ -83,6 +86,10 @@ class VideoGeneratorController extends Controller
       }
       return back()->with('error', 'Could not fetch ayah texts.');
     }
+
+    // Get surah name for filename
+    $surahData = $this->quranService->getSurahInfo($surah);
+    $surahName = $surahData['name'] ?? "سورة_{$surah}";
 
     // 2. Download and Merge Audio
     $audioPaths = [];
@@ -138,7 +145,7 @@ class VideoGeneratorController extends Controller
     // 3. Create Final Video
     session(['generation_status' => 'Encoding final video (this may take a minute)...', 'generation_progress' => 85]);
     session()->save();
-    $finalVideoPath = $this->videoService->createFinalVideo($mergedAudio, $overlayData, $sessionId, $backgroundPath);
+    $finalVideoPath = $this->videoService->createFinalVideo($mergedAudio, $overlayData, $sessionId, $backgroundPaths, $surahName, $from, $to);
 
     session(['generation_progress' => 100, 'generation_status' => 'Success!']);
     session()->save();

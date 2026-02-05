@@ -371,59 +371,84 @@ class QuranVideoService
   /**
    * Create final video by combining background, audio, and sync'd overlays.
    */
-  public function createFinalVideo($audioPath, array $overlayData, $sessionId, $backgroundPath = null)
+  public function createFinalVideo($audioPath, array $overlayData, $sessionId, $backgroundPaths = [], $surahName = null, $fromAyah = null, $toAyah = null)
   {
     $this->ensureDirectoriesExist();
 
-    $outputPath = Storage::disk('public')->path("videos/output/reels_{$sessionId}.mp4");
-
-    // Use provided background or fetch a random nature one
-    if (!$backgroundPath) {
-      $backgroundPath = $this->getNatureBackground($sessionId);
+    // Generate descriptive filename
+    $filename = "reels_{$sessionId}.mp4";
+    if ($surahName && $fromAyah && $toAyah) {
+      // Clean surah name for filename (remove special characters)
+      $cleanSurahName = preg_replace('/[^a-zA-Z0-9\x{0600}-\x{06FF}\s_-]/u', '', $surahName);
+      $cleanSurahName = str_replace(' ', '_', $cleanSurahName);
+      $filename = "{$cleanSurahName}_من_{$fromAyah}-{$toAyah}.mp4";
     }
 
-    $isImage = true;
-    if ($backgroundPath) {
-      $mime = mime_content_type($backgroundPath);
-      $isImage = strpos($mime, 'image') !== false;
-    }
+    $outputPath = Storage::disk('public')->path("videos/output/{$filename}");
 
-    $backgroundInput = "";
-    $bgInputIndex = 0;
-
-    if (!$backgroundPath) {
-      Log::warning("No background available, using solid color fallback.");
-      $backgroundInput = "-f lavfi -i color=c=black:s={$this->width}x{$this->height}:d=1000";
-    } else {
-      if ($isImage) {
-        $backgroundInput = "-loop 1 -i \"{$backgroundPath}\"";
-      } else {
-        // Video background: loop it
-        $backgroundInput = "-stream_loop -1 -i \"{$backgroundPath}\"";
-      }
+    // Use provided backgrounds or fetch a random nature one
+    if (empty($backgroundPaths)) {
+      $backgroundPaths = [$this->getNatureBackground($sessionId)];
     }
 
     $duration = $this->getDuration($audioPath);
 
-    // Build FFmpeg complex filter
-    // 1. Prepare Background (Scale/Crop/Animate)
+    // Handle multiple images: create a concatenated background
+    $backgroundInput = "";
     $bgFilter = "";
-    if (!$backgroundPath) {
-      $bgFilter = "scale={$this->width}:{$this->height}[bg];";
-    } elseif ($isImage) {
-      // Use uploaded image as-is without any scaling or cropping
-      $bgFilter = "null[bg];";
+
+    if (count($backgroundPaths) == 1) {
+      // Single background (image or video)
+      $backgroundPath = $backgroundPaths[0];
+      $isImage = true;
+      if ($backgroundPath) {
+        $mime = mime_content_type($backgroundPath);
+        $isImage = strpos($mime, 'image') !== false;
+      }
+
+      if (!$backgroundPath) {
+        Log::warning("No background available, using solid color fallback.");
+        $backgroundInput = "-f lavfi -i color=c=black:s={$this->width}x{$this->height}:d=1000";
+        $bgFilter = "scale={$this->width}:{$this->height}[bg];";
+      } else {
+        if ($isImage) {
+          $backgroundInput = "-loop 1 -i \"{$backgroundPath}\"";
+          $bgFilter = "null[bg];";
+        } else {
+          // Video background: loop it
+          $backgroundInput = "-stream_loop -1 -i \"{$backgroundPath}\"";
+          $bgFilter = "scale=w='if(gt(iw/ih,{$this->width}/{$this->height}),-1,{$this->width})':h='if(gt(iw/ih,{$this->width}/{$this->height}),{$this->height},-1)',crop={$this->width}:{$this->height}[bg];";
+        }
+      }
     } else {
-      // Video background: Scale and Crop to vertical
-      $bgFilter = "scale=w='if(gt(iw/ih,{$this->width}/{$this->height}),-1,{$this->width})':h='if(gt(iw/ih,{$this->width}/{$this->height}),{$this->height},-1)',crop={$this->width}:{$this->height}[bg];";
+      // Multiple images: cycle through them
+      $imageDuration = $duration / count($backgroundPaths);
+
+      // Add all images as inputs
+      foreach ($backgroundPaths as $path) {
+        $backgroundInput .= "-loop 1 -t {$imageDuration} -i \"{$path}\" ";
+      }
+
+      // Build concat filter for multiple images - scale to fit without cropping (with padding)
+      $scaleFilters = "";
+      $concatInputs = "";
+      for ($i = 0; $i < count($backgroundPaths); $i++) {
+        $scaleFilters .= "[{$i}:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=decrease,pad={$this->width}:{$this->height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1[v{$i}];";
+        $concatInputs .= "[v{$i}]";
+      }
+      $bgFilter = $scaleFilters . "{$concatInputs}concat=n=" . count($backgroundPaths) . ":v=1:a=0[bg];";
     }
+
+    // Calculate audio input index based on number of background images
+    $audioInputIdx = count($backgroundPaths);
 
     $overlayInputs = "";
     $overlayFilters = "";
     $lastLabel = "[bg]";
 
     foreach ($overlayData as $i => $data) {
-      $inputIdx = $i + 2;
+      // Overlay inputs start after backgrounds and audio
+      $inputIdx = $audioInputIdx + 1 + $i;
       $overlayInputs .= " -loop 1 -i \"{$data['path']}\"";
       $start = $data['start'];
       $end = $data['end'];
@@ -435,8 +460,6 @@ class QuranVideoService
     $filterComplex = $bgFilter . $overlayFilters;
     $filterComplex = rtrim($filterComplex, "; ");
 
-    $audioInputIdx = 1;
-
     $command = "{$this->ffmpeg} -y " .
       "{$backgroundInput} " .
       "-i \"{$audioPath}\" " .
@@ -447,9 +470,11 @@ class QuranVideoService
 
     $success = $this->runCommand($command, "creating final video");
 
-    // Cleanup temporary background
-    if ($backgroundPath && file_exists($backgroundPath)) {
-      Storage::disk('public')->delete("images/bg_{$sessionId}.jpg");
+    // Cleanup temporary backgrounds
+    foreach ($backgroundPaths as $bgPath) {
+      if ($bgPath && strpos($bgPath, 'nature_bg_') !== false && file_exists($bgPath)) {
+        @unlink($bgPath);
+      }
     }
 
     return $success ? $outputPath : null;

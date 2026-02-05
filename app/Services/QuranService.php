@@ -40,6 +40,20 @@ class QuranService
   }
 
   /**
+   * Get specific surah information by number.
+   */
+  public function getSurahInfo($surahNumber)
+  {
+    $surahs = $this->getSurahs();
+    foreach ($surahs as $surah) {
+      if ($surah['number'] == $surahNumber) {
+        return $surah;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Fetch Arabic text for a specific range of ayahs in a surah.
    */
   public function getAyahTexts($surahNumber, $fromAyah, $toAyah)
