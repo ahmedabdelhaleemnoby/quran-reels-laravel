@@ -106,13 +106,10 @@ class QuranVideoService
   }
 
   /**
-   * Generate Arabic text overlay image using ImageMagick.
-   */
-  /**
    * Generate Arabic text overlay image using PHP GD.
    * This handles basic RTL and Shaping (Ligatures).
    */
-  public function generateTextOverlay($text, $index, $sessionId)
+  public function generateTextOverlay($text, $index, $sessionId, $options = [])
   {
     $outputPath = Storage::disk('public')->path("images/overlay_{$sessionId}_{$index}.png");
     $fontPath = $this->getFontPath();
@@ -122,56 +119,15 @@ class QuranVideoService
       return null;
     }
 
-    // 1. Create a transparent canvas
     $image = imagecreatetruecolor($this->width, $this->height);
     imagesavealpha($image, true);
     $transparent = imagecolorallocatealpha($image, 0, 0, 0, 127);
     imagefill($image, 0, 0, $transparent);
 
-    // 2. Text settings
-    $fontSize = 65; // Increased from 45
-    $white = imagecolorallocate($image, 255, 255, 255);
-    $black = imagecolorallocatealpha($image, 0, 0, 0, 80); // Shadow
-
-    // 3. Prepare RTL and Word Wrap
-    $lines = $this->wrapArabicText($text, 25, $fontSize, $fontPath);
-
-    // 4. Centering calculation
-    $lineHeight = $fontSize * 1.6;
-    $totalHeight = count($lines) * $lineHeight;
-    $startY = ($this->height - $totalHeight) / 2 + $fontSize;
-
-    foreach ($lines as $i => $line) {
-      $bbox = imagettfbbox($fontSize, 0, $fontPath, $line);
-      $textWidth = $bbox[2] - $bbox[0];
-      $x = ($this->width - $textWidth) / 2;
-      $y = $startY + ($i * $lineHeight);
-
-      // Draw Shadow
-      imagettftext($image, $fontSize, 0, $x + 4, $y + 4, $black, $fontPath, $line);
-
-      // Draw "Simulated Bold" (Multiple passes with slight offset)
-      // Offsets for thickness: center, +1x, -1x, +1y, -1y
-      $offsets = [
-        [0, 0],
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-        [1, 1],
-        [-1, -1],
-        [1, -1],
-        [-1, 1] // Diagonals for smoother bold
-      ];
-
-      foreach ($offsets as $offset) {
-        imagettftext($image, $fontSize, 0, $x + $offset[0], $y + $offset[1], $white, $fontPath, $line);
-      }
-    }
+    $this->renderStyledText($image, $text, $fontPath, $options);
 
     imagepng($image, $outputPath);
     imagedestroy($image);
-
     return $outputPath;
   }
 
@@ -240,13 +196,12 @@ class QuranVideoService
 
   protected function shapeArabicWord($word)
   {
-    // 1. Initial Glyphs and Mapping
     $glyphs = [
       'ا' => ['\uFE8D', '\uFE8E', '\uFE8D', '\uFE8E'],
       'أ' => ['\uFE83', '\uFE84', '\uFE83', '\uFE84'],
       'إ' => ['\uFE87', '\uFE88', '\uFE87', '\uFE88'],
       'آ' => ['\uFE81', '\uFE82', '\uFE81', '\uFE82'],
-      'ٱ' => ['\uFB50', '\uFB51', '\uFB50', '\uFB51'], // Alef Wasla
+      'ٱ' => ['\uFB50', '\uFB51', '\uFB50', '\uFB51'],
       'ب' => ['\uFE8F', '\uFE90', '\uFE92', '\uFE91'],
       'ت' => ['\uFE95', '\uFE96', '\uFE98', '\uFE97'],
       'ث' => ['\uFE99', '\uFE9A', '\uFE9C', '\uFE9B'],
@@ -279,43 +234,32 @@ class QuranVideoService
       'ء' => ['\uFE80', '\uFE80', '\uFE80', '\uFE80'],
     ];
 
-    // 2. Pre-process ligatures (Simplified handling)
     $word = str_replace(['لأ', 'لإ', 'لآ', 'لا'], ['\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB'], $word);
-
-    // 3. Regex for Tashkeel and control characters
-    $tashkeelRegex = '/[\x{064B}-\x{065F}\x{0670}\x{06D6}-\x{06ED}]/u';
     $controlRegex = '/[\x{200B}-\x{200F}\x{00A0}\x{FEFF}\x{0000}-\x{001F}]/u';
 
-    // 4. Tokenize word into segments (base char + following marks)
     preg_match_all('/./us', $word, $rawChars);
     $rawChars = $rawChars[0];
     $segments = [];
     $currentSegment = null;
 
     foreach ($rawChars as $char) {
-      // Remove control characters instantly but keep Tashkeel
       if (preg_match($controlRegex, $char))
         continue;
-
       $isBase = isset($glyphs[$char]) || in_array($char, ['\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB']);
-
       if ($isBase) {
         if ($currentSegment)
           $segments[] = $currentSegment;
         $currentSegment = ['base' => $char, 'marks' => ''];
       } else {
-        if ($currentSegment) {
+        if ($currentSegment)
           $currentSegment['marks'] .= $char;
-        } else {
-          // Initial marks if they exist (rare)
+        else
           $segments[] = ['base' => $char, 'marks' => '', 'is_mark_only' => true];
-        }
       }
     }
     if ($currentSegment)
       $segments[] = $currentSegment;
 
-    // 5. Shaping logic
     $canJoinLeft = function ($char) use ($glyphs) {
       $nonLeftJoiners = ['ا', 'أ', 'إ', 'آ', 'ٱ', 'د', 'ذ', 'ر', 'ز', 'و', 'ء', 'ة', '\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB'];
       return (isset($glyphs[$char]) || in_array($char, ['\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB'])) && !in_array($char, $nonLeftJoiners);
@@ -323,43 +267,29 @@ class QuranVideoService
 
     $result = '';
     $count = count($segments);
-
     for ($i = 0; $i < $count; $i++) {
       $segment = $segments[$i];
       $char = $segment['base'];
-
       if (isset($segment['is_mark_only']) || !isset($glyphs[$char])) {
         $result .= $char . ($segment['marks'] ?? '');
         continue;
       }
-
       $prevBase = ($i > 0 && !isset($segments[$i - 1]['is_mark_only'])) ? $segments[$i - 1]['base'] : null;
       $nextBase = ($i < $count - 1 && !isset($segments[$i + 1]['is_mark_only'])) ? $segments[$i + 1]['base'] : null;
-
       $joinsPrev = ($prevBase && $canJoinLeft($prevBase));
       $joinsNext = ($nextBase && (isset($glyphs[$nextBase]) || in_array($nextBase, ['\uFEF7', '\uFEF9', '\uFEF5', '\uFEFB'])) && $canJoinLeft($char));
-
-      if ($joinsPrev && $joinsNext) {
-        $form = 2; // Middle
-      } elseif ($joinsPrev) {
-        $form = 1; // End
-      } elseif ($joinsNext) {
-        $form = 3; // Beginning
-      } else {
-        $form = 0; // Isolated
-      }
-
+      if ($joinsPrev && $joinsNext)
+        $form = 2;
+      elseif ($joinsPrev)
+        $form = 1;
+      elseif ($joinsNext)
+        $form = 3;
+      else
+        $form = 0;
       $shapedBase = json_decode('"' . $glyphs[$char][$form] . '"');
       $result .= $shapedBase . $segment['marks'];
     }
-
     return $result;
-  }
-
-  protected function prepareArabicText($text)
-  {
-    // No longer used directly, integrated into wrapArabicText
-    return $text;
   }
 
   protected function utf8_strrev($str)
@@ -374,40 +304,27 @@ class QuranVideoService
   public function createFinalVideo($audioPath, array $overlayData, $sessionId, $backgroundPaths = [], $surahName = null, $fromAyah = null, $toAyah = null)
   {
     $this->ensureDirectoriesExist();
-
-    // Generate descriptive filename
     $filename = "reels_{$sessionId}.mp4";
     if ($surahName && $fromAyah && $toAyah) {
-      // Clean surah name for filename (remove special characters)
       $cleanSurahName = preg_replace('/[^a-zA-Z0-9\x{0600}-\x{06FF}\s_-]/u', '', $surahName);
       $cleanSurahName = str_replace(' ', '_', $cleanSurahName);
       $filename = "{$cleanSurahName}_من_{$fromAyah}-{$toAyah}.mp4";
     }
-
     $outputPath = Storage::disk('public')->path("videos/output/{$filename}");
-
-    // Use provided backgrounds or fetch a random nature one
-    if (empty($backgroundPaths)) {
+    if (empty($backgroundPaths))
       $backgroundPaths = [$this->getNatureBackground($sessionId)];
-    }
-
     $duration = $this->getDuration($audioPath);
-
-    // Handle multiple images: create a concatenated background
     $backgroundInput = "";
     $bgFilter = "";
 
     if (count($backgroundPaths) == 1) {
-      // Single background (image or video)
       $backgroundPath = $backgroundPaths[0];
       $isImage = true;
       if ($backgroundPath) {
         $mime = mime_content_type($backgroundPath);
         $isImage = strpos($mime, 'image') !== false;
       }
-
       if (!$backgroundPath) {
-        Log::warning("No background available, using solid color fallback.");
         $backgroundInput = "-f lavfi -i color=c=black:s={$this->width}x{$this->height}:d=1000";
         $bgFilter = "scale={$this->width}:{$this->height}[bg];";
       } else {
@@ -415,21 +332,14 @@ class QuranVideoService
           $backgroundInput = "-loop 1 -i \"{$backgroundPath}\"";
           $bgFilter = "null[bg];";
         } else {
-          // Video background: loop it
           $backgroundInput = "-stream_loop -1 -i \"{$backgroundPath}\"";
           $bgFilter = "scale=w='if(gt(iw/ih,{$this->width}/{$this->height}),-1,{$this->width})':h='if(gt(iw/ih,{$this->width}/{$this->height}),{$this->height},-1)',crop={$this->width}:{$this->height}[bg];";
         }
       }
     } else {
-      // Multiple images: cycle through them
       $imageDuration = $duration / count($backgroundPaths);
-
-      // Add all images as inputs
-      foreach ($backgroundPaths as $path) {
+      foreach ($backgroundPaths as $path)
         $backgroundInput .= "-loop 1 -t {$imageDuration} -i \"{$path}\" ";
-      }
-
-      // Build concat filter for multiple images - scale to fit without cropping (with padding)
       $scaleFilters = "";
       $concatInputs = "";
       for ($i = 0; $i < count($backgroundPaths); $i++) {
@@ -439,15 +349,11 @@ class QuranVideoService
       $bgFilter = $scaleFilters . "{$concatInputs}concat=n=" . count($backgroundPaths) . ":v=1:a=0[bg];";
     }
 
-    // Calculate audio input index based on number of background images
     $audioInputIdx = count($backgroundPaths);
-
     $overlayInputs = "";
     $overlayFilters = "";
     $lastLabel = "[bg]";
-
     foreach ($overlayData as $i => $data) {
-      // Overlay inputs start after backgrounds and audio
       $inputIdx = $audioInputIdx + 1 + $i;
       $overlayInputs .= " -loop 1 -i \"{$data['path']}\"";
       $start = number_format($data['start'], 3, '.', '');
@@ -456,27 +362,119 @@ class QuranVideoService
       $overlayFilters .= "{$lastLabel}[{$inputIdx}:v]overlay=(W-w)/2:(H-h)/2:enable='between(t,{$start},{$end})'{$nextLabel}; ";
       $lastLabel = $nextLabel;
     }
-
     $filterComplex = $bgFilter . $overlayFilters;
     $filterComplex = rtrim($filterComplex, "; ");
-
-    $command = "{$this->ffmpeg} -y " .
-      "{$backgroundInput} " .
-      "-i \"{$audioPath}\" " .
-      "{$overlayInputs} " .
-      "-filter_complex \"{$filterComplex}\" " .
-      "-map \"{$lastLabel}\" -map {$audioInputIdx}:a " .
-      "-c:v libx264 -c:a aac -shortest -pix_fmt yuv420p \"{$outputPath}\"";
-
+    $command = "{$this->ffmpeg} -y {$backgroundInput} -i \"{$audioPath}\" {$overlayInputs} -filter_complex \"{$filterComplex}\" -map \"{$lastLabel}\" -map {$audioInputIdx}:a -c:v libx264 -c:a aac -shortest -pix_fmt yuv420p \"{$outputPath}\"";
     $success = $this->runCommand($command, "creating final video");
-
-    // Cleanup temporary backgrounds
     foreach ($backgroundPaths as $bgPath) {
-      if ($bgPath && strpos($bgPath, 'nature_bg_') !== false && file_exists($bgPath)) {
+      if ($bgPath && strpos($bgPath, 'nature_bg_') !== false && file_exists($bgPath))
         @unlink($bgPath);
+    }
+    return $success ? $outputPath : null;
+  }
+
+  public function generateSlidePreview($text, $index, $sessionId, $backgroundPath = null, $options = [])
+  {
+    $outputPath = Storage::disk('public')->path("images/slide_{$sessionId}_{$index}.png");
+    $fontPath = $this->getFontPath();
+    if (!$fontPath)
+      return null;
+
+    if ($backgroundPath && file_exists($backgroundPath)) {
+      $mime = mime_content_type($backgroundPath);
+      if (strpos($mime, 'image') !== false) {
+        $ext = pathinfo($backgroundPath, PATHINFO_EXTENSION);
+        if (in_array(strtolower($ext), ['jpg', 'jpeg']))
+          $image = imagecreatefromjpeg($backgroundPath);
+        elseif (strtolower($ext) === 'png')
+          $image = imagecreatefrompng($backgroundPath);
+        else {
+          $image = imagecreatetruecolor($this->width, $this->height);
+          $bg = imagecolorallocate($image, 20, 20, 40);
+          imagefill($image, 0, 0, $bg);
+        }
+        $resized = imagescale($image, $this->width, $this->height);
+        imagedestroy($image);
+        $image = $resized;
+      } else {
+        $image = imagecreatetruecolor($this->width, $this->height);
+        $bg = imagecolorallocate($image, 20, 20, 40);
+        imagefill($image, 0, 0, $bg);
       }
+    } else {
+      $image = imagecreatetruecolor($this->width, $this->height);
+      $bg = imagecolorallocate($image, 20, 20, 40);
+      imagefill($image, 0, 0, $bg);
     }
 
-    return $success ? $outputPath : null;
+    $this->renderStyledText($image, $text, $fontPath, $options);
+    imagepng($image, $outputPath);
+    imagedestroy($image);
+    return $outputPath;
+  }
+
+  protected function renderStyledText($image, $text, $fontPath, $options = [])
+  {
+    $fontSize = $options['font_size'] ?? 65;
+    $textColor = $options['text_color'] ?? '#FFFFFF';
+    $isBold = $options['bold'] ?? true;
+    $lineHeightMultiplier = $options['line_height'] ?? 1.6;
+    $position = $options['text_position'] ?? 'middle';
+    $bgStyle = $options['text_bg_style'] ?? 'shadow';
+    $bgColor = $options['text_bg_color'] ?? '#000000';
+    $bgOpacity = $options['text_bg_opacity'] ?? 0.5;
+
+    list($r, $g, $b) = sscanf($textColor, "#%02x%02x%02x");
+    $mainColor = imagecolorallocate($image, $r, $g, $b);
+    $lines = $this->wrapArabicText($text, 25, $fontSize, $fontPath);
+    $lineHeight = $fontSize * $lineHeightMultiplier;
+    $totalHeight = count($lines) * $lineHeight;
+
+    if ($position === 'top')
+      $startY = ($this->height * 0.2) + $fontSize;
+    elseif ($position === 'bottom')
+      $startY = ($this->height * 0.8) - $totalHeight + $fontSize;
+    else
+      $startY = ($this->height - $totalHeight) / 2 + $fontSize;
+
+    foreach ($lines as $i => $line) {
+      $bbox = imagettfbbox($fontSize, 0, $fontPath, $line);
+      $textWidth = $bbox[2] - $bbox[0];
+      $x = ($this->width - $textWidth) / 2;
+      $y = $startY + ($i * $lineHeight);
+      if ($bgStyle === 'letterbox') {
+        list($br, $bg, $bb) = sscanf($bgColor, "#%02x%02x%02x");
+        $alpha = (int) (127 * (1 - $bgOpacity));
+        $boxColor = imagecolorallocatealpha($image, $br, $bg, $bb, $alpha);
+        $padding = $fontSize * 0.3;
+        imagefilledrectangle($image, $x - $padding, $y - $fontSize - $padding / 2, $x + $textWidth + $padding, $y + $padding / 2, $boxColor);
+      } elseif ($bgStyle === 'shadow') {
+        $shadowColor = imagecolorallocatealpha($image, 0, 0, 0, 80);
+        imagettftext($image, $fontSize, 0, $x + 4, $y + 4, $shadowColor, $fontPath, $line);
+      }
+      if ($isBold) {
+        $offsets = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+        foreach ($offsets as $offset)
+          imagettftext($image, $fontSize, 0, $x + $offset[0], $y + $offset[1], $mainColor, $fontPath, $line);
+      } else
+        imagettftext($image, $fontSize, 0, $x, $y, $mainColor, $fontPath, $line);
+    }
+  }
+
+  /**
+   * Delete old temporary files to keep the project clean.
+   */
+  public function cleanupFiles()
+  {
+    $folders = ['images', 'videos/output', 'audio', 'backgrounds'];
+    foreach ($folders as $folder) {
+      $files = Storage::disk('public')->files($folder);
+      foreach ($files as $file) {
+        if (basename($file) !== '.gitignore')
+          Storage::disk('public')->delete($file);
+      }
+    }
+    Log::info("Project cleanup performed: deleted temporary files.");
+    return true;
   }
 }
