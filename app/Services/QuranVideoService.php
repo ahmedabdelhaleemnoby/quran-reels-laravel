@@ -330,10 +330,10 @@ class QuranVideoService
       } else {
         if ($isImage) {
           $backgroundInput = "-loop 1 -i \"{$backgroundPath}\"";
-          $bgFilter = "null[bg];";
+          $bgFilter = "scale=trunc(iw/2)*2:trunc(ih/2)*2[bg];";
         } else {
           $backgroundInput = "-stream_loop -1 -i \"{$backgroundPath}\"";
-          $bgFilter = "scale=w='if(gt(iw/ih,{$this->width}/{$this->height}),-1,{$this->width})':h='if(gt(iw/ih,{$this->width}/{$this->height}),{$this->height},-1)',crop={$this->width}:{$this->height}[bg];";
+          $bgFilter = "scale=trunc(iw/2)*2:trunc(ih/2)*2[bg];";
         }
       }
     } else {

@@ -483,15 +483,25 @@
 
     <form action="{{ route('generator.generate') }}" method="POST" enctype="multipart/form-data" id="generator-form">
       @csrf
+
       <div class="form-group">
-        <label for="reciter">القارئ (Reciter)</label>
-        <select name="reciter" id="reciter" required>
-          <option value="">Choose a reciter...</option>
-          @foreach($reciters as $reciter)
-            <option value="{{ $reciter['identifier'] }}">{{ $reciter['name'] }} ({{ $reciter['englishName'] }})</option>
-          @endforeach
+        <label for="content_type">نوع المحتوى (Content Type)</label>
+        <select name="content_type" id="content_type" required>
+          <option value="quran">قرآن كريم (Quran)</option>
+          <option value="doaa">أدعية وأذكار (Doaa & Adhkar)</option>
         </select>
       </div>
+
+      <div id="quran-section">
+        <div class="form-group">
+          <label for="reciter">القارئ (Reciter)</label>
+          <select name="reciter" id="reciter" required>
+            <option value="">Choose a reciter...</option>
+            @foreach($reciters as $reciter)
+              <option value="{{ $reciter['identifier'] }}">{{ $reciter['name'] }} ({{ $reciter['englishName'] }})</option>
+            @endforeach
+          </select>
+        </div>
 
       <div class="form-group">
         <label for="surah">السورة (Surah)</label>
@@ -520,6 +530,30 @@
       <div class="form-group">
         <label for="duration">المدة القصوى (Max Duration - Sec)</label>
         <input type="number" name="duration" id="duration" min="5" max="60" value="30">
+      </div>
+      </div>
+
+      <div id="doaa-section" style="display: none;">
+        <div class="form-group">
+          <label for="doaa_category">فئة الدعاء (Doaa Category)</label>
+          <select name="doaa_category" id="doaa_category">
+            <option value="">اختر الفئة (Choose category)...</option>
+            <option value="1">أذكار الصباح والمساء (Morning & Evening Azkar)</option>
+            <option value="2">أذكار النوم (Sleep Azkar)</option>
+            <option value="3">أذكار الاستيقاظ من النوم (Waking Up Azkar)</option>
+            <option value="4">أذكار الصلاة (Prayer Azkar)</option>
+            <option value="5">أذكار المسجد (Mosque Azkar)</option>
+            <option value="6">أذكار الأذان (Adhan Azkar)</option>
+            <option value="7">أذكار المنزل (Home Azkar)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="doaa_item">الدعاء (Select Doaa)</label>
+          <select name="doaa_item" id="doaa_item">
+            <option value="">اختر دعاء (Choose a doaa)...</option>
+          </select>
+        </div>
       </div>
 
       <div class="form-group">
@@ -717,6 +751,54 @@
     const bgOpacityInput = document.getElementById('text_bg_opacity');
     const positionInput = document.getElementById('text_position');
     const bgColorInput = document.getElementById('text_bg_color');
+    const contentTypeSelect = document.getElementById('content_type');
+    const quranSection = document.getElementById('quran-section');
+    const doaaSection = document.getElementById('doaa-section');
+    const doaaCategorySelect = document.getElementById('doaa_category');
+    const doaaItemSelect = document.getElementById('doaa_item');
+
+    // Handle content type switching
+    contentTypeSelect.addEventListener('change', function() {
+      if (this.value === 'quran') {
+        quranSection.style.display = 'block';
+        doaaSection.style.display = 'none';
+        document.getElementById('reciter').required = true;
+        document.getElementById('surah').required = true;
+        document.getElementById('doaa_category').required = false;
+        document.getElementById('doaa_item').required = false;
+      } else if (this.value === 'doaa') {
+        quranSection.style.display = 'none';
+        doaaSection.style.display = 'block';
+        document.getElementById('reciter').required = false;
+        document.getElementById('surah').required = false;
+        document.getElementById('doaa_category').required = true;
+        document.getElementById('doaa_item').required = true;
+      }
+    });
+
+    // Handle doaa category selection - fetch doaas for selected category
+    doaaCategorySelect.addEventListener('change', async function() {
+      const category = this.value;
+      doaaItemSelect.innerHTML = '<option value="">اختر دعاء (Choose a doaa)...</option>';
+
+      if (!category) return;
+
+      try {
+        const response = await fetch(`/doaas/${category}`);
+        const data = await response.json();
+
+        if (data.success && data.doaas) {
+          data.doaas.forEach(doaa => {
+            const option = document.createElement('option');
+            option.value = doaa.id;
+            option.textContent = doaa.text.substring(0, 50) + '...';
+            doaaItemSelect.appendChild(option);
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching doaas:', error);
+      }
+    });
 
     // Debounce helper
     function debounce(func, timeout = 500) {

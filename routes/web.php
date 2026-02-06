@@ -8,4 +8,5 @@ Route::post('/generate', [VideoGeneratorController::class, 'generate'])->name('g
 Route::post('/preview', [VideoGeneratorController::class, 'preview'])->name('generator.preview');
 Route::post('/generate-from-preview', [VideoGeneratorController::class, 'generateFromPreview'])->name('generator.generateFromPreview');
 Route::get('/generator/progress', [VideoGeneratorController::class, 'progress'])->name('generator.progress');
+Route::get('/doaas/{category}', [VideoGeneratorController::class, 'getDoaasByCategory'])->name('generator.doaas');
 Route::post('/cleanup', [VideoGeneratorController::class, 'cleanup'])->name('generator.cleanup');

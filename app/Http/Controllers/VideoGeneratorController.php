@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Services\QuranService;
 use App\Services\QuranVideoService;
+use App\Services\DoaaService;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -13,11 +14,13 @@ class VideoGeneratorController extends Controller
 {
   protected $quranService;
   protected $videoService;
+  protected $doaaService;
 
-  public function __construct(QuranService $quranService, QuranVideoService $videoService)
+  public function __construct(QuranService $quranService, QuranVideoService $videoService, DoaaService $doaaService)
   {
     $this->quranService = $quranService;
     $this->videoService = $videoService;
+    $this->doaaService = $doaaService;
   }
 
   /**
@@ -27,8 +30,10 @@ class VideoGeneratorController extends Controller
   {
     $reciters = $this->quranService->getReciters();
     $surahs = $this->quranService->getSurahs();
+    $doaaCategories = $this->doaaService->getDoaaCategories();
+    $doaaReciters = $this->doaaService->getDoaaReciters();
 
-    return view('welcome', compact('reciters', 'surahs'));
+    return view('welcome', compact('reciters', 'surahs', 'doaaCategories', 'doaaReciters'));
   }
 
   /**
@@ -43,11 +48,10 @@ class VideoGeneratorController extends Controller
     session(['generation_progress' => 0, 'generation_status' => 'Starting...']);
     session()->save();
 
-    $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
-      'reciter' => ['required', 'string'],
-      'surah' => ['required', 'integer', 'min:1', 'max:114'],
-      'ayah_from' => ['required', 'integer', 'min:1'],
-      'ayah_to' => ['required', 'integer', 'min:1', 'gte:ayah_from'],
+    $contentType = $request->input('content_type', 'quran');
+
+    $rules = [
+      'content_type' => ['required', 'string', 'in:quran,doaa'],
       'duration' => ['nullable', 'integer', 'min:5', 'max:60'],
       'font_size' => ['nullable', 'integer', 'min:20', 'max:150'],
       'text_color' => ['nullable', 'string', 'regex:/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
@@ -57,10 +61,22 @@ class VideoGeneratorController extends Controller
       'text_bg_opacity' => ['nullable', 'numeric', 'min:0', 'max:1'],
       'bold' => ['nullable', 'boolean'],
       'line_height' => ['nullable', 'numeric', 'min:1', 'max:3'],
-      'background' => ['nullable', 'array', 'max:10'], // Max 10 images
-      'background.*' => ['nullable', 'file', 'mimes:jpeg,png,jpg,mp4,mov', 'max:51200'], // 50MB per file
+      'background' => ['nullable', 'array', 'max:10'],
+      'background.*' => ['nullable', 'file', 'mimes:jpeg,png,jpg,mp4,mov', 'max:51200'],
       'no_text_overlay' => ['nullable', 'boolean'],
-    ]);
+    ];
+
+    if ($contentType === 'quran') {
+      $rules['reciter'] = ['required', 'string'];
+      $rules['surah'] = ['required', 'integer', 'min:1', 'max:114'];
+      $rules['ayah_from'] = ['required', 'integer', 'min:1'];
+      $rules['ayah_to'] = ['required', 'integer', 'min:1', 'gte:ayah_from'];
+    } else {
+      $rules['doaa_category'] = ['required', 'string'];
+      $rules['doaa_item'] = ['required', 'integer'];
+    }
+
+    $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
 
     if ($validator->fails()) {
       if ($request->expectsJson()) {
@@ -81,10 +97,7 @@ class VideoGeneratorController extends Controller
         $backgroundPaths[] = Storage::disk('public')->path($storedPath);
       }
     }
-    $reciter = $request->reciter;
-    $surah = $request->surah;
-    $from = $request->ayah_from;
-    $to = $request->ayah_to;
+
     $noTextOverlay = $request->has('no_text_overlay') && $request->no_text_overlay == '1';
 
     $options = [
@@ -98,56 +111,109 @@ class VideoGeneratorController extends Controller
       'text_bg_opacity' => $request->text_bg_opacity ?? 0.5,
     ];
 
-    // 1. Fetch Ayah Texts
-    $ayahs = $this->quranService->getAyahTexts($surah, $from, $to);
-    if (empty($ayahs)) {
-      if ($request->expectsJson()) {
-        return response()->json(['success' => false, 'message' => 'Could not fetch ayah texts.'], 400);
-      }
-      return back()->with('error', 'Could not fetch ayah texts.');
-    }
+    // Initialize variables
+    $items = [];
+    $fileName = '';
 
-    // Get surah name for filename
-    $surahData = $this->quranService->getSurahInfo($surah);
-    $surahName = $surahData['name'] ?? "سورة_{$surah}";
+    if ($contentType === 'quran') {
+      // Quran mode
+      $reciter = $request->reciter;
+      $surah = $request->surah;
+      $from = $request->ayah_from;
+      $to = $request->ayah_to;
+
+      // Fetch Ayah Texts
+      $ayahs = $this->quranService->getAyahTexts($surah, $from, $to);
+      if (empty($ayahs)) {
+        if ($request->expectsJson()) {
+          return response()->json(['success' => false, 'message' => 'Could not fetch ayah texts.'], 400);
+        }
+        return back()->with('error', 'Could not fetch ayah texts.');
+      }
+
+      $items = $ayahs;
+      $surahData = $this->quranService->getSurahInfo($surah);
+      $surahName = $surahData['name'] ?? "سورة_{$surah}";
+      $fileName = $surahName;
+
+    } else {
+      // Doaa mode
+      $category = $request->doaa_category;
+      $doaaId = $request->doaa_item;
+
+      // Get all doaas for the category
+      $doaas = $this->doaaService->getDoaasByCategory($category);
+
+      // Find the specific doaa
+      $selectedDoaa = collect($doaas)->firstWhere('id', $doaaId);
+
+      if (!$selectedDoaa) {
+        if ($request->expectsJson()) {
+          return response()->json(['success' => false, 'message' => 'Could not fetch doaa.'], 400);
+        }
+        return back()->with('error', 'Could not fetch doaa.');
+      }
+
+      // Format doaa as an item
+      $items = [[
+        'text' => $selectedDoaa['text'],
+        'title' => $selectedDoaa['title'] ?? 'دعاء',
+        'number' => 1,
+        'audio' => $selectedDoaa['audio'] ?? null
+      ]];
+
+      $fileName = $selectedDoaa['title'] ?? 'doaa';
+    }
 
     // 2. Download and Merge Audio
     $audioPaths = [];
     $overlayData = [];
     $currentTime = 0;
 
-    if (count($ayahs) > 0) {
-      $progressStep = 70 / count($ayahs); // Main loop is 70% of progress
+    if (count($items) > 0) {
+      $progressStep = 70 / count($items);
     } else {
       $progressStep = 0;
     }
 
-    foreach ($ayahs as $i => $ayah) {
-      session(['generation_status' => "Processing Ayah " . ($i + 1) . " of " . count($ayahs)]);
+    foreach ($items as $i => $item) {
+      $itemLabel = $contentType === 'quran' ? "Ayah" : "Doaa";
+      session(['generation_status' => "Processing {$itemLabel} " . ($i + 1) . " of " . count($items)]);
       session(['generation_progress' => 5 + ($i * $progressStep)]);
       session()->save();
 
-      $path = $this->quranService->downloadAyahAudio($reciter, $ayah['number']);
-      if (!$path)
+      // Get audio path based on content type
+      if ($contentType === 'quran') {
+        $path = $this->quranService->downloadAyahAudio($reciter, $item['number']);
+      } else {
+        // For doaa, download real audio from GitHub
+        $audioPath = $item['audio'] ?? null;
+        $path = $this->doaaService->downloadDoaaAudio($audioPath, $sessionId);
+      }
+
+      if (!$path) {
         continue;
+      }
 
       $duration = $this->videoService->getDuration($path);
 
-      // Generate overlay for this ayah (skip if no_text_overlay is checked)
+      // Generate overlay (skip if no_text_overlay is checked)
       if (!$noTextOverlay) {
-        $overlayPath = $this->videoService->generateTextOverlay($ayah['text'], $ayah['numberInSurah'], $sessionId, $options);
+        $itemNumber = $contentType === 'quran' ? $item['numberInSurah'] : $item['number'];
+        $overlayPath = $this->videoService->generateTextOverlay($item['text'], $itemNumber, $sessionId, $options);
 
         $overlayData[] = [
           'path' => $overlayPath,
           'start' => $currentTime,
           'end' => $currentTime + $duration,
-          'text' => $ayah['text']
+          'text' => $item['text']
         ];
       }
 
       $audioPaths[] = $path;
 
-      Log::info("Ayah {$ayah['numberInSurah']}: Start={$currentTime}, Duration={$duration}, End=" . ($currentTime + $duration));
+      $itemId = $contentType === 'quran' ? $item['numberInSurah'] : $item['number'];
+      Log::info("{$itemLabel} {$itemId}: Start={$currentTime}, Duration={$duration}, End=" . ($currentTime + $duration));
 
       $currentTime += $duration;
     }
@@ -168,7 +234,13 @@ class VideoGeneratorController extends Controller
     // 3. Create Final Video
     session(['generation_status' => 'Encoding final video (this may take a minute)...', 'generation_progress' => 85]);
     session()->save();
-    $finalVideoPath = $this->videoService->createFinalVideo($mergedAudio, $overlayData, $sessionId, $backgroundPaths, $surahName, $from, $to);
+
+    // Pass appropriate parameters based on content type
+    if ($contentType === 'quran') {
+      $finalVideoPath = $this->videoService->createFinalVideo($mergedAudio, $overlayData, $sessionId, $backgroundPaths, $fileName, $from, $to);
+    } else {
+      $finalVideoPath = $this->videoService->createFinalVideo($mergedAudio, $overlayData, $sessionId, $backgroundPaths, $fileName, 1, 1);
+    }
 
     session(['generation_progress' => 100, 'generation_status' => 'Success!']);
     session()->save();
@@ -360,6 +432,12 @@ class VideoGeneratorController extends Controller
       'progress' => session('generation_progress', 0),
       'status' => session('generation_status', 'Waiting...')
     ]);
+  }
+
+  public function getDoaasByCategory($category)
+  {
+    $doaas = $this->doaaService->getDoaasByCategory($category);
+    return response()->json(['success' => true, 'doaas' => $doaas]);
   }
 
   public function cleanup()
