@@ -43,6 +43,10 @@ class QuranVideoService
     $fonts = [
       storage_path('fonts/Amiri-Regular.ttf'),
       base_path('storage/fonts/Amiri-Regular.ttf'),
+      '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+      '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
+      '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
       '/Library/Fonts/Amiri-Regular.ttf',
       '/System/Library/Fonts/GeezaPro.ttc',
       '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
@@ -330,7 +334,7 @@ class QuranVideoService
       } else {
         if ($isImage) {
           $backgroundInput = "-loop 1 -i \"{$backgroundPath}\"";
-          $bgFilter = "null[bg];";
+          $bgFilter = "scale=trunc(iw/2)*2:trunc(ih/2)*2[bg];";
         } else {
           $backgroundInput = "-stream_loop -1 -i \"{$backgroundPath}\"";
           $bgFilter = "scale=w='if(gt(iw/ih,{$this->width}/{$this->height}),-1,{$this->width})':h='if(gt(iw/ih,{$this->width}/{$this->height}),{$this->height},-1)',crop={$this->width}:{$this->height}[bg];";
@@ -343,7 +347,7 @@ class QuranVideoService
       $scaleFilters = "";
       $concatInputs = "";
       for ($i = 0; $i < count($backgroundPaths); $i++) {
-        $scaleFilters .= "[{$i}:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=decrease,pad={$this->width}:{$this->height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1[v{$i}];";
+        $scaleFilters .= "[{$i}:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1[v{$i}];";
         $concatInputs .= "[v{$i}]";
       }
       $bgFilter = $scaleFilters . "{$concatInputs}concat=n=" . count($backgroundPaths) . ":v=1:a=0[bg];";

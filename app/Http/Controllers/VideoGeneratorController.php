@@ -36,8 +36,9 @@ class VideoGeneratorController extends Controller
    */
   public function generate(Request $request)
   {
-    set_time_limit(600); // Allow up to 10 minutes
-    ini_set('memory_limit', '1024M');
+    try {
+      set_time_limit(600); // Allow up to 10 minutes
+      ini_set('memory_limit', '1024M');
 
     // Initialize progress
     session(['generation_progress' => 0, 'generation_status' => 'Starting...']);
@@ -187,6 +188,22 @@ class VideoGeneratorController extends Controller
       return response()->json(['success' => true, 'video_url' => $videoUrl]);
     }
     return back()->with('success', 'Video generated successfully!')->with('video_url', $videoUrl);
+    } catch (\Exception $e) {
+      \Log::error('Video generation error: ' . $e->getMessage());
+      \Log::error('Stack trace: ' . $e->getTraceAsString());
+
+      session(['generation_progress' => 0, 'generation_status' => 'Error: ' . $e->getMessage()]);
+      session()->save();
+
+      if ($request->expectsJson()) {
+        return response()->json([
+          'success' => false,
+          'message' => 'Error: ' . $e->getMessage(),
+          'details' => $e->getTraceAsString()
+        ], 500);
+      }
+      return back()->with('error', 'Error: ' . $e->getMessage());
+    }
   }
 
   /**
